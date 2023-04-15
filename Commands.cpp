@@ -202,17 +202,27 @@ void SmallShell::setPrompt(const std::string cmd_line)
 * Creates and returns a pointer to Command class which matches the given command line (cmd_line)
 */
 Command * SmallShell::CreateCommand(const std::string cmd_line) {
-
+    // Get first word (command)
     string cmd_s = _trim(string(cmd_line));
     string firstWord = cmd_s.substr(0, cmd_s.find_first_of(" \n"));
 
-    if (firstWord == "pwd") {
+    if (cmd_s == "") return nullptr; // TODO: Not sure what they want us to do in this case, but this works for now,update if needed
+
+    // Clean (without &) version of firstWord
+    char* clean_ptr = new char[cmd_s.length() + 1];
+    strcpy(clean_ptr, cmd_s.c_str());
+    _removeBackgroundSign(clean_ptr);
+    std::string cmd_s_clean(clean_ptr);
+    std::string firstWord_clean = cmd_s.substr(0, cmd_s_clean.find_first_of(" \n")); // note: chprompt& hello, shouldn't work
+
+    // Check command
+    if (firstWord_clean == "pwd") {
         return new GetCurrDirCommand(cmd_line);
     }
-    else if (firstWord == "showpid") {
+    else if (firstWord_clean == "showpid") {
         return new ShowPidCommand(cmd_line);
     }
-    else if (firstWord == "chprompt") {
+    else if (firstWord_clean == "chprompt") {
       SmallShell::setPrompt(cmd_s);
       return nullptr;
     }

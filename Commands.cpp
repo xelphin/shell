@@ -102,6 +102,40 @@ std::string _findXthWord(const std::string str_full, int x)
 // ------- COMMAND CLASSES -------
 // -------------------------------
 
+Command::Command(const std::string cmd_line) : cmd_str(cmd_line) {
+    // initialize other fields if you write them
+}
+
+Command::~Command() {
+    // cleanup
+}
+
+BuiltInCommand::BuiltInCommand(const std::string cmd_line) : Command(cmd_line) {
+    // initialize other fields if you write them
+}
+
+// INDIVIDUAL COMMANDS
+
+ShowPidCommand::ShowPidCommand(const std::string cmd_line) : BuiltInCommand(cmd_line) {
+    // initialize other fields if you write them
+}
+
+void ShowPidCommand::execute()
+{
+    std::string text = "smash pid is ";
+    // Get pid : TODO: Check that this is actually the pid() that they want
+    pid_t pid = getpid();
+    std::string pidStr = std::to_string(pid);
+    text += pidStr;
+    text += "\n";
+    // Print
+    std::cout << text;
+}
+
+
+
+
+
 
 // TODO: Add your implementation for classes in Commands.h
 
@@ -149,23 +183,21 @@ void SmallShell::setPrompt(const std::string cmd_line)
 * Creates and returns a pointer to Command class which matches the given command line (cmd_line)
 */
 Command * SmallShell::CreateCommand(const std::string cmd_line) {
-	// For example:
 
-  string cmd_s = _trim(string(cmd_line));
-  string firstWord = cmd_s.substr(0, cmd_s.find_first_of(" \n"));
+    string cmd_s = _trim(string(cmd_line));
+    string firstWord = cmd_s.substr(0, cmd_s.find_first_of(" \n"));
 
-  if (firstWord == "pwd") {
-    // return new GetCurrDirCommand(cmd_line);
-    return nullptr; // TODO: erase
-  }
-  else if (firstWord == "showpid") {
-    // return new ShowPidCommand(cmd_line);
-    return nullptr; // TODO: erase
-  }
-  else if (firstWord == "chprompt") {
+    if (firstWord == "pwd") {
+        // return new GetCurrDirCommand(cmd_line);
+        return nullptr; // TODO: erase
+    }
+    else if (firstWord == "showpid") {
+        return new ShowPidCommand(cmd_line);
+    }
+    else if (firstWord == "chprompt") {
       SmallShell::setPrompt(cmd_s);
       return nullptr;
-  }
+    }
     /*
     else if ...
     .....
@@ -173,7 +205,7 @@ Command * SmallShell::CreateCommand(const std::string cmd_line) {
       return new ExternalCommand(cmd_line);
     }
     */
-  return nullptr;
+    return nullptr;
 }
 
 void SmallShell::executeCommand(const std::string cmd_line) {

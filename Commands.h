@@ -13,7 +13,7 @@ private:
     // TODO: Add your data members
     std::string cmd_str;
  public:
-  Command(const char* cmd_line);
+  Command(const std::string cmd_line);
   virtual ~Command();
   virtual void execute() = 0;
   //virtual void prepare();
@@ -23,7 +23,7 @@ private:
 
 class BuiltInCommand : public Command {
  public:
-  BuiltInCommand(const char* cmd_line);
+  BuiltInCommand(const std::string cmd_line);
   virtual ~BuiltInCommand() {}
 };
 
@@ -54,21 +54,21 @@ class RedirectionCommand : public Command {
 
 class ChangeDirCommand : public BuiltInCommand {
 // TODO: Add your data members public:
-  ChangeDirCommand(const char* cmd_line, char** plastPwd);
+  ChangeDirCommand(const std::string cmd_line, char** plastPwd);
   virtual ~ChangeDirCommand() {}
   void execute() override;
 };
 
 class GetCurrDirCommand : public BuiltInCommand {
  public:
-  GetCurrDirCommand(const char* cmd_line);
+  GetCurrDirCommand(const std::string cmd_line);
   virtual ~GetCurrDirCommand() {}
   void execute() override;
 };
 
 class ShowPidCommand : public BuiltInCommand {
  public:
-  ShowPidCommand(const char* cmd_line);
+  ShowPidCommand(const std::string cmd_line);
   virtual ~ShowPidCommand() {}
   void execute() override;
 };

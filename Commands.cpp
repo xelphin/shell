@@ -77,44 +77,98 @@ void _removeBackgroundSign(char* cmd_line) {
   cmd_line[str.find_last_not_of(WHITESPACE, idx) + 1] = 0;
 }
 
-// TODO: Add your implementation for classes in Commands.h 
+// -------------------------------
+// ------- COMMAND CLASSES -------
+// -------------------------------
+
+
+// TODO: Add your implementation for classes in Commands.h
+
+// --------------------------
+// ------- SMALL SHELL -------
+// --------------------------
+
+std::string SmallShell::helper_findXthWord(const std::string str_full, int x)
+{
+    if (x<0) return "";
+    std::string str = _trim(string(str_full));
+    int endFirst = str.find_first_of(" \n");
+    std::string firstWord = str.substr(0, endFirst);
+    int countBlanks = 0;
+    if (x == 0) {
+        return firstWord;
+    }
+    for (int i=endFirst; str[i] != '\n' && i < str.length(); i++) {
+        if (str[i]==' ' && str[i+1]!=' ') {
+            countBlanks++;
+        }
+        else if (str[i]!=' ' && countBlanks == x) {
+            return _trim(str.substr(i,str.find_first_of(" \n", i+1) - i));
+        }
+    }
+    return "";
+}
 
 SmallShell::SmallShell() {
 // TODO: add your implementation
+    this->smashPrompt = "smash> ";
 }
 
 SmallShell::~SmallShell() {
 // TODO: add your implementation
 }
 
+std::string SmallShell::getSmashPrompt() const
+{
+    return this->smashPrompt;
+}
+void SmallShell::setPrompt(const std::string cmd_line)
+{
+    std::string secondWord = SmallShell::helper_findXthWord(cmd_line, 1);
+    // TODO: IF second word is & then it shouldn't count, need to use _removeBackgroundSign() I think
+    if (secondWord == "") {
+        this->smashPrompt = "smash> ";
+    } else {
+        this->smashPrompt = secondWord + "> ";
+    }
+}
+
+
 /**
 * Creates and returns a pointer to Command class which matches the given command line (cmd_line)
 */
-Command * SmallShell::CreateCommand(const char* cmd_line) {
+Command * SmallShell::CreateCommand(const std::string cmd_line) {
 	// For example:
-/*
+
   string cmd_s = _trim(string(cmd_line));
   string firstWord = cmd_s.substr(0, cmd_s.find_first_of(" \n"));
 
-  if (firstWord.compare("pwd") == 0) {
-    return new GetCurrDirCommand(cmd_line);
+  if (firstWord == "pwd") {
+    // return new GetCurrDirCommand(cmd_line);
+    return nullptr; // TODO: erase
   }
-  else if (firstWord.compare("showpid") == 0) {
-    return new ShowPidCommand(cmd_line);
+  else if (firstWord == "showpid") {
+    // return new ShowPidCommand(cmd_line);
+    return nullptr; // TODO: erase
   }
-  else if ...
-  .....
-  else {
-    return new ExternalCommand(cmd_line);
+  else if (firstWord == "chprompt") {
+      SmallShell::setPrompt(cmd_s);
+      return nullptr;
   }
-  */
+    /*
+    else if ...
+    .....
+    else {
+      return new ExternalCommand(cmd_line);
+    }
+    */
   return nullptr;
 }
 
-void SmallShell::executeCommand(const char *cmd_line) {
-  // TODO: Add your implementation here
-  // for example:
-  // Command* cmd = CreateCommand(cmd_line);
-  // cmd->execute();
+void SmallShell::executeCommand(const std::string cmd_line) {
+  Command* cmd = CreateCommand(cmd_line);
+  if (cmd!=nullptr) {
+      cmd->execute();
+  }
   // Please note that you must fork smash process for some commands (e.g., external commands....)
 }

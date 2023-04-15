@@ -2,12 +2,16 @@
 #define SMASH_COMMAND_H_
 
 #include <vector>
+#include <iostream>
+#include <string>
 
 #define COMMAND_ARGS_MAX_LENGTH (200)
 #define COMMAND_MAX_ARGS (20)
 
 class Command {
-// TODO: Add your data members
+private:
+    // TODO: Add your data members
+    std::string cmd_str;
  public:
   Command(const char* cmd_line);
   virtual ~Command();
@@ -167,9 +171,12 @@ class KillCommand : public BuiltInCommand {
 class SmallShell {
  private:
   // TODO: Add your data members
+  std::string smashPrompt;
+  void setPrompt(const std::string cmd_line);
+  std::string helper_findXthWord(const std::string str_full, int x);
   SmallShell();
  public:
-  Command *CreateCommand(const char* cmd_line);
+  Command *CreateCommand(const std::string cmd_line);
   SmallShell(SmallShell const&)      = delete; // disable copy ctor
   void operator=(SmallShell const&)  = delete; // disable = operator
   static SmallShell& getInstance() // make SmallShell singleton
@@ -179,8 +186,11 @@ class SmallShell {
     return instance;
   }
   ~SmallShell();
-  void executeCommand(const char* cmd_line);
+  void executeCommand(const std::string cmd_line);
   // TODO: add extra methods as needed
+
+  // OUR METHODS
+  std::string getSmashPrompt() const;
 };
 
 #endif //SMASH_COMMAND_H_

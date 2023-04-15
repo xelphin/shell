@@ -4,6 +4,7 @@
 #include <signal.h>
 #include "Commands.h"
 #include "signals.h"
+#include <string>
 
 int main(int argc, char* argv[]) {
     if(signal(SIGTSTP , ctrlZHandler)==SIG_ERR) {
@@ -16,11 +17,13 @@ int main(int argc, char* argv[]) {
     //TODO: setup sig alarm handler
 
     SmallShell& smash = SmallShell::getInstance();
-    while(true) {
-        std::cout << "smash> ";
+    int count = 0; // TODO: DELETE, this was made so that the while will stop
+    while(true && count < 10) { // TODO: DELETE count < 10
+        count++;
+        std::cout << smash.getSmashPrompt();
         std::string cmd_line;
         std::getline(std::cin, cmd_line);
-        smash.executeCommand(cmd_line.c_str());
+        smash.executeCommand(cmd_line);
     }
     return 0;
 }

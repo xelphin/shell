@@ -135,25 +135,30 @@ void ChangeDirCommand::execute()
 
     // See if there's a third word (illegal)
     if (_findXthWord(this->cmd_str, 2) != "") {
-        std::cout << "smash error: cd: too many arguments\n";
+        std::cerr << "smash error: cd: too many arguments\n";
         return;
     }
     // See if there's only one word->"cd" (illegal?) // TODO: what to do if only get "cd" (or "cd&")?
     std::string secondWord = _findXthWord(this->cmd_str, 1);
-    if (secondWord == "") {
-        std::cout << "smash error: cd: too few arguments\n";
-        return;
-    }
+
     // See if special: second word is "-"
     if (secondWord == "-") {
         if (*lastPwd == "") {
-            std::cout << "smash error: cd: OLDPWD not set\n";
+            std::cerr << "smash error: cd: OLDPWD not set\n";
             return;
         }
-        chdir((*lastPwd).c_str());
+        if (chdir((*lastPwd).c_str()) != 0) {
+            // Not successful
+            std::perror("smash error: cd failed"); // TODO: is this how they want it?
+            return;
+        }
     } else {
         // Normal: cd <path>
-        chdir(secondWord.c_str());
+        if (chdir(secondWord.c_str()) != 0) {
+            // Not successful
+            std::perror("smash error: cd failed"); // TODO: is this how they want it?
+            return;
+        }
     }
 
     // Update last working directory

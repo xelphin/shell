@@ -104,6 +104,8 @@ std::string _findXthWord(const std::string str_full, int x)
 // ------- COMMAND CLASSES -------
 // -------------------------------
 
+// TODO: Add your implementation for classes in Commands.h
+
 Command::Command(const std::string cmd_line) : cmd_str(cmd_line) {
     // initialize other fields if you write them
 }
@@ -112,15 +114,15 @@ Command::~Command() {
     // cleanup
 }
 
-BuiltInCommand::BuiltInCommand(const std::string cmd_line) : Command(cmd_line) {
-    // initialize other fields if you write them
-}
+BuiltInCommand::BuiltInCommand(const std::string cmd_line) : Command(cmd_line) {}
 
-// INDIVIDUAL COMMANDS
+// ----------------------------------
+// ------- BUILT IN COMMANDS -------
+// -----------------------------------
 
-ChangeDirCommand::ChangeDirCommand(const std::string cmd_line, std::string* lastPwd) : BuiltInCommand(cmd_line), lastPwd(lastPwd) {
-    // initialize other fields if you write them
-}
+// CHANGE_DIR COMMAND
+
+ChangeDirCommand::ChangeDirCommand(const std::string cmd_line, std::string* lastPwd) : BuiltInCommand(cmd_line), lastPwd(lastPwd) {}
 
 void ChangeDirCommand::execute()
 {
@@ -160,9 +162,9 @@ void ChangeDirCommand::execute()
     // TODO: Check if instead I have to continue going back in cd history (I think above is what they wanted)
 }
 
-GetCurrDirCommand::GetCurrDirCommand(const std::string cmd_line) : BuiltInCommand(cmd_line) {
-    // initialize other fields if you write them
-}
+// GET_CURR_DIR COMMAND
+
+GetCurrDirCommand::GetCurrDirCommand(const std::string cmd_line) : BuiltInCommand(cmd_line) {}
 
 void GetCurrDirCommand::execute()
 {
@@ -179,9 +181,9 @@ void GetCurrDirCommand::execute()
     std::cout << text;
 }
 
-ShowPidCommand::ShowPidCommand(const std::string cmd_line) : BuiltInCommand(cmd_line) {
-    // initialize other fields if you write them
-}
+// SHOW_PID COMMAND
+
+ShowPidCommand::ShowPidCommand(const std::string cmd_line) : BuiltInCommand(cmd_line) {}
 
 void ShowPidCommand::execute()
 {
@@ -195,18 +197,9 @@ void ShowPidCommand::execute()
     std::cout << text;
 }
 
-
-
-
-
-
-// TODO: Add your implementation for classes in Commands.h
-
 // --------------------------
 // ------- SMALL SHELL -------
 // --------------------------
-
-
 
 SmallShell::SmallShell() {
 // TODO: add your implementation
@@ -252,20 +245,24 @@ std::string SmallShell::getLastWorkingDirectory() const
 * Creates and returns a pointer to Command class which matches the given command line (cmd_line)
 */
 Command * SmallShell::CreateCommand(const std::string cmd_line) {
+
+    // EXTRACT INPUTS
+
     // Get first word (command)
     string cmd_s = _trim(string(cmd_line));
     string firstWord = cmd_s.substr(0, cmd_s.find_first_of(" \n"));
 
     if (cmd_s == "") return nullptr; // TODO: Not sure what they want us to do in this case, but this works for now,update if needed
 
-    // Clean (without &) version of firstWord
+    // Clean (without &) versions of cmd_s and firstWord
     char* clean_ptr = new char[cmd_s.length() + 1];
     strcpy(clean_ptr, cmd_s.c_str());
     _removeBackgroundSign(clean_ptr);
     std::string cmd_s_clean(clean_ptr);
     std::string firstWord_clean = cmd_s.substr(0, cmd_s_clean.find_first_of(" \n")); // note: chprompt& hello, shouldn't work
 
-    // Check command
+    // CHOOSE COMMAND
+
     if (firstWord_clean == "pwd") {
         return new GetCurrDirCommand(cmd_line);
     }
@@ -279,6 +276,7 @@ Command * SmallShell::CreateCommand(const std::string cmd_line) {
     else if (firstWord_clean == "cd") {
         return new ChangeDirCommand(cmd_line, this->getLastWorkingDirectoryPointer());
     }
+    // TODO: Continue with more commands here
     /*
     else if ...
     .....
@@ -288,6 +286,10 @@ Command * SmallShell::CreateCommand(const std::string cmd_line) {
     */
     return nullptr;
 }
+
+// -------------------------------
+// ------- SHELL EXECUTION -------
+// -------------------------------
 
 void SmallShell::executeCommand(const std::string cmd_line) {
   Command* cmd = CreateCommand(cmd_line);

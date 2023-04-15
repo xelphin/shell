@@ -116,6 +116,25 @@ BuiltInCommand::BuiltInCommand(const std::string cmd_line) : Command(cmd_line) {
 
 // INDIVIDUAL COMMANDS
 
+GetCurrDirCommand::GetCurrDirCommand(const std::string cmd_line) : BuiltInCommand(cmd_line) {
+    // initialize other fields if you write them
+}
+
+void GetCurrDirCommand::execute()
+{
+    std::string text = "";
+
+    // Get path
+    char cwd[OUTPUT_MAX_OUT]; // TODO: check that the pwd can't in fact exceed 80 characters (asked in Piazza)
+    if (getcwd(cwd, sizeof(cwd)) != NULL) {
+        text += cwd;
+    }
+    text += "\n";
+
+    // Print
+    std::cout << text;
+}
+
 ShowPidCommand::ShowPidCommand(const std::string cmd_line) : BuiltInCommand(cmd_line) {
     // initialize other fields if you write them
 }
@@ -188,8 +207,7 @@ Command * SmallShell::CreateCommand(const std::string cmd_line) {
     string firstWord = cmd_s.substr(0, cmd_s.find_first_of(" \n"));
 
     if (firstWord == "pwd") {
-        // return new GetCurrDirCommand(cmd_line);
-        return nullptr; // TODO: erase
+        return new GetCurrDirCommand(cmd_line);
     }
     else if (firstWord == "showpid") {
         return new ShowPidCommand(cmd_line);

@@ -7,6 +7,7 @@
 
 #define COMMAND_ARGS_MAX_LENGTH (200)
 #define COMMAND_MAX_ARGS (20)
+#define OUTPUT_MAX_OUT (80)
 
 class Command {
 private:

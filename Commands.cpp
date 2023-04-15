@@ -77,18 +77,7 @@ void _removeBackgroundSign(char* cmd_line) {
   cmd_line[str.find_last_not_of(WHITESPACE, idx) + 1] = 0;
 }
 
-// -------------------------------
-// ------- COMMAND CLASSES -------
-// -------------------------------
-
-
-// TODO: Add your implementation for classes in Commands.h
-
-// --------------------------
-// ------- SMALL SHELL -------
-// --------------------------
-
-std::string SmallShell::helper_findXthWord(const std::string str_full, int x)
+std::string _findXthWord(const std::string str_full, int x)
 {
     if (x<0) return "";
     std::string str = _trim(string(str_full));
@@ -109,6 +98,19 @@ std::string SmallShell::helper_findXthWord(const std::string str_full, int x)
     return "";
 }
 
+// -------------------------------
+// ------- COMMAND CLASSES -------
+// -------------------------------
+
+
+// TODO: Add your implementation for classes in Commands.h
+
+// --------------------------
+// ------- SMALL SHELL -------
+// --------------------------
+
+
+
 SmallShell::SmallShell() {
 // TODO: add your implementation
     this->smashPrompt = "smash> ";
@@ -124,7 +126,7 @@ std::string SmallShell::getSmashPrompt() const
 }
 void SmallShell::setPrompt(const std::string cmd_line)
 {
-    std::string secondWord = SmallShell::helper_findXthWord(cmd_line, 1);
+    std::string secondWord = _findXthWord(cmd_line, 1);
     // TODO: IF second word is & then it shouldn't count, need to use _removeBackgroundSign() I think
     if (secondWord == "") {
         this->smashPrompt = "smash> ";

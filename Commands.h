@@ -173,7 +173,6 @@ class SmallShell {
   // TODO: Add your data members
   std::string smashPrompt;
   void setPrompt(const std::string cmd_line);
-  std::string helper_findXthWord(const std::string str_full, int x);
   SmallShell();
  public:
   Command *CreateCommand(const std::string cmd_line);

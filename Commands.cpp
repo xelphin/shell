@@ -126,13 +126,22 @@ std::string SmallShell::getSmashPrompt() const
 }
 void SmallShell::setPrompt(const std::string cmd_line)
 {
-    std::string secondWord = _findXthWord(cmd_line, 1);
-    // TODO: IF second word is & then it shouldn't count, need to use _removeBackgroundSign() I think
+    // Turn to char* so that can apply _removeBackgroundSign()
+    char* clean_ptr = new char[cmd_line.length() + 1];
+    strcpy(clean_ptr, cmd_line.c_str());
+    _removeBackgroundSign(clean_ptr);
+    std::string clean_str(clean_ptr);
+
+    // Find second word and update smash prompt
+    std::string secondWord = _findXthWord(clean_str, 1);
     if (secondWord == "") {
         this->smashPrompt = "smash> ";
     } else {
         this->smashPrompt = secondWord + "> ";
     }
+
+    // Clear memory
+    delete[] clean_ptr;
 }
 
 

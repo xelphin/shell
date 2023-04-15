@@ -84,9 +84,11 @@ std::string _findXthWord(const std::string str_full, int x)
     int endFirst = str.find_first_of(" \n");
     std::string firstWord = str.substr(0, endFirst);
     int countBlanks = 0;
+    // First Word
     if (x == 0) {
         return firstWord;
     }
+    // Word from second and beyond
     for (int i=endFirst; str[i] != '\n' && i < str.length(); i++) {
         if (str[i]==' ' && str[i+1]!=' ') {
             countBlanks++;
@@ -115,6 +117,48 @@ BuiltInCommand::BuiltInCommand(const std::string cmd_line) : Command(cmd_line) {
 }
 
 // INDIVIDUAL COMMANDS
+
+ChangeDirCommand::ChangeDirCommand(const std::string cmd_line, std::string* lastPwd) : BuiltInCommand(cmd_line), lastPwd(lastPwd) {
+    // initialize other fields if you write them
+}
+
+void ChangeDirCommand::execute()
+{
+    // Get current directory
+    std::string currDir = "/";
+    char cwd[OUTPUT_MAX_OUT];
+    if (getcwd(cwd, sizeof(cwd)) != NULL) {
+        currDir = cwd;
+    }
+
+    // See if there's a third word (illegal)
+    if (_findXthWord(this->cmd_str, 2) != "") {
+        std::cout << "smash error: cd: too many arguments\n";
+        return;
+    }
+    // See if there's only one word->"cd" (illegal?) // TODO: what to do if only get "cd" (or "cd&")?
+    std::string secondWord = _findXthWord(this->cmd_str, 1);
+    if (secondWord == "") {
+        std::cout << "smash error: cd: too few arguments\n";
+        return;
+    }
+    // See if special: second word is "-"
+    if (secondWord == "-") {
+        if (*lastPwd == "") {
+            std::cout << "smash error: cd: OLDPWD not set\n";
+            return;
+        }
+        chdir((*lastPwd).c_str());
+    } else {
+        // Normal: cd <path>
+        chdir(secondWord.c_str());
+    }
+
+    // Update last working directory
+    *lastPwd = currDir;
+
+    // TODO: Check if instead I have to continue going back in cd history (I think above is what they wanted)
+}
 
 GetCurrDirCommand::GetCurrDirCommand(const std::string cmd_line) : BuiltInCommand(cmd_line) {
     // initialize other fields if you write them
@@ -167,6 +211,7 @@ void ShowPidCommand::execute()
 SmallShell::SmallShell() {
 // TODO: add your implementation
     this->smashPrompt = "smash> ";
+    this->lastWorkingDirectory = ""; // uninitialized
 }
 
 SmallShell::~SmallShell() {
@@ -197,6 +242,11 @@ void SmallShell::setPrompt(const std::string cmd_line)
     delete[] clean_ptr;
 }
 
+std::string SmallShell::getLastWorkingDirectory() const
+{
+    return this->lastWorkingDirectory;
+}
+
 
 /**
 * Creates and returns a pointer to Command class which matches the given command line (cmd_line)
@@ -225,6 +275,9 @@ Command * SmallShell::CreateCommand(const std::string cmd_line) {
     else if (firstWord_clean == "chprompt") {
       SmallShell::setPrompt(cmd_s);
       return nullptr;
+    }
+    else if (firstWord_clean == "cd") {
+        return new ChangeDirCommand(cmd_line, this->getLastWorkingDirectoryPointer());
     }
     /*
     else if ...

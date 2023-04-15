@@ -10,7 +10,7 @@
 #define OUTPUT_MAX_OUT (80)
 
 class Command {
-private:
+protected:
     // TODO: Add your data members
     std::string cmd_str;
  public:
@@ -54,8 +54,10 @@ class RedirectionCommand : public Command {
 };
 
 class ChangeDirCommand : public BuiltInCommand {
-// TODO: Add your data members public:
-  ChangeDirCommand(const std::string cmd_line, char** plastPwd);
+private:
+    std::string* lastPwd;
+public:
+  ChangeDirCommand(const std::string cmd_line, std::string* lastPwd);
   virtual ~ChangeDirCommand() {}
   void execute() override;
 };
@@ -171,10 +173,19 @@ class KillCommand : public BuiltInCommand {
 
 class SmallShell {
  private:
-  // TODO: Add your data members
+
+  // Private date members
   std::string smashPrompt;
+  std::string lastWorkingDirectory;
+
+  // Private functions
   void setPrompt(const std::string cmd_line);
+  std::string getLastWorkingDirectory() const;
+  std::string* getLastWorkingDirectoryPointer() {
+      return &lastWorkingDirectory;
+  }
   SmallShell();
+
  public:
   Command *CreateCommand(const std::string cmd_line);
   SmallShell(SmallShell const&)      = delete; // disable copy ctor

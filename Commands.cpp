@@ -147,7 +147,7 @@ Command::Command(const std::string cmd_line) : cmd_str(cmd_line), word_count(0) 
     int count = 0;
     for (std::vector<std::string>::const_iterator it = (this->cmd_args).begin(); it != (this->cmd_args).end(); ++it) {
         cmd_args_array[count] = new char[(*it).size() + 1];
-        strcpy(cmd_args_array[count], (*it).c_str());
+        strcpy(cmd_args_array[count], (*it).c_str()); // TODO: SERIOUSLY check that I'm not leaking memory everywhere
         count++;
     }
 
@@ -170,10 +170,7 @@ ExternalCommand::ExternalCommand(const std::string cmd_line) : Command(cmd_line)
 
 void ExternalCommand::execute()
 {
-
-    // Just basic idea scrapped over here
-
-    // TODO: The following is a simple implementation for fg commands, do the rest
+    // TODO: The following is a basic implementation for commands like "/bin/date", do the rest
     if (this->word_count < 1) {
         std::cout << " Too few words\n"; // TODO: Erase
         return;
@@ -188,8 +185,7 @@ void ExternalCommand::execute()
     // CHILD
     else if (pid == 0) {
         setpgrp();
-        char* args[] = {"/bin/date", NULL}; // TODO: Use argv[] instead
-        execv(args[0], args);
+        execv(cmd_args_array[0], cmd_args_array); // works for example if you enter "/bin/date" into bash
         std::cerr << "Error executing command\n";
         // EXIT ?
         exit(EXIT_FAILURE);

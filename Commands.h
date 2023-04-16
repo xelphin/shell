@@ -15,6 +15,7 @@ protected:
     std::string cmd_str;
     int word_count;
     std::vector<std::string> cmd_args;
+    char** cmd_args_array;
  public:
   Command(const std::string cmd_line);
   virtual ~Command();

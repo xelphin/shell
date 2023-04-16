@@ -131,19 +131,7 @@ int _fillVectorWithStrings(const std::string str_full, std::vector<std::string>&
     return vector.size();
 }
 
-void _vectorToCharArray(std::vector<std::string>& vector, char**& argv)
-{
-    // Copy each word into the argv array
-    int count = 0;
-    for (std::vector<std::string>::const_iterator it = vector.begin(); it != vector.end(); ++it) {
-        argv[count] = new char[(*it).size() + 1];
-        strcpy(argv[count], (*it).c_str());
-        count++;
-    }
 
-    // Set last element to NULL
-    argv[vector.size()] = NULL;
-}
 
 // -------------------------------
 // ------- COMMAND CLASSES -------
@@ -153,10 +141,25 @@ void _vectorToCharArray(std::vector<std::string>& vector, char**& argv)
 
 Command::Command(const std::string cmd_line) : cmd_str(cmd_line), word_count(0) {
     word_count = _fillVectorWithStrings(cmd_line, this->cmd_args);
+    cmd_args_array = new char*[(this->cmd_args).size() + 1]; // +1 for NULL
+
+    // Create Array
+    int count = 0;
+    for (std::vector<std::string>::const_iterator it = (this->cmd_args).begin(); it != (this->cmd_args).end(); ++it) {
+        cmd_args_array[count] = new char[(*it).size() + 1];
+        strcpy(cmd_args_array[count], (*it).c_str());
+        count++;
+    }
+
+    // Set last element in args to NULL
+    cmd_args_array[(this->cmd_args).size()] = NULL;
 }
 
 Command::~Command() {
-    // cleanup
+    for (int i = 0; i < (this->cmd_args).size(); ++i) {
+        delete[] cmd_args_array[i];
+    }
+    delete[] cmd_args_array;
 }
 
 // --------------------------------
@@ -170,23 +173,13 @@ void ExternalCommand::execute()
 
     // Just basic idea scrapped over here
 
-
     // TODO: The following is a simple implementation for fg commands, do the rest
     if (this->word_count < 1) {
         std::cout << " Too few words\n"; // TODO: Erase
         return;
     }
 
-    // Get arguments
-    char** argv = new char*[(this->cmd_args).size() + 1]; // +1 for NULL
-    _vectorToCharArray((this->cmd_args), argv);
-
-    // Add /bin/ to command
-    std::string command_str = "/bin/"; // TODO: Not true for all commands! Fix.
-    command_str += argv[0];
-    const char* command = command_str.c_str();
-
-    // Fork
+    // FORK
     pid_t pid = fork();
     if (pid < 0) {
         perror("fork failed");
@@ -195,14 +188,9 @@ void ExternalCommand::execute()
     // CHILD
     else if (pid == 0) {
         setpgrp();
-        char* args[] = {const_cast<char*>(command), NULL}; // TODO: Use argv() instead
+        char* args[] = {"/bin/date", NULL}; // TODO: Use argv[] instead
         execv(args[0], args);
         std::cerr << "Error executing command\n";
-        // FREE
-        for (int i = 0; i < (this->cmd_args).size(); ++i) {
-            delete[] argv[i];
-        }
-        delete[] argv;
         // EXIT ?
         exit(EXIT_FAILURE);
     }
@@ -211,12 +199,6 @@ void ExternalCommand::execute()
     else {
         wait(NULL);
     }
-
-    // FREE
-    for (int i = 0; i < (this->cmd_args).size(); ++i) {
-        delete[] argv[i];
-    }
-    delete[] argv;
 }
 
 // ----------------------------------

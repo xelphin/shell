@@ -13,6 +13,8 @@ class Command {
 protected:
     // TODO: Add your data members
     std::string cmd_str;
+    int word_count;
+    std::vector<std::string> cmd_args;
  public:
   Command(const std::string cmd_line);
   virtual ~Command();
@@ -30,7 +32,7 @@ class BuiltInCommand : public Command {
 
 class ExternalCommand : public Command {
  public:
-  ExternalCommand(const char* cmd_line);
+  ExternalCommand(const std::string cmd_line);
   virtual ~ExternalCommand() {}
   void execute() override;
 };

@@ -77,27 +77,58 @@ void _removeBackgroundSign(char* cmd_line) {
   cmd_line[str.find_last_not_of(WHITESPACE, idx) + 1] = 0;
 }
 
-std::string _findXthWord(const std::string str_full, int x)
+std::string _findXthWord(std::vector<std::string>& vector, int x)
 {
-    if (x<0) return "";
-    std::string str = _trim(string(str_full));
-    int endFirst = str.find_first_of(" \n");
-    std::string firstWord = str.substr(0, endFirst);
-    int countBlanks = 0;
-    // First Word
-    if (x == 0) {
-        return firstWord;
-    }
-    // Word from second and beyond
-    for (int i=endFirst; str[i] != '\n' && i < str.length(); i++) {
-        if (str[i]==' ' && str[i+1]!=' ') {
-            countBlanks++;
+    int count = 0;
+    for(std::vector<std::string>::const_iterator it = vector.begin(); it != vector.end(); ++it) {
+        if (count == x) {
+            return *it;
         }
-        else if (str[i]!=' ' && countBlanks == x) {
-            return _trim(str.substr(i,str.find_first_of(" \n", i+1) - i));
-        }
+        count++;
     }
     return "";
+}
+
+int _fillVectorWithStrings(const std::string str_full, std::vector<std::string>& vector)
+{
+    std::string str = _trim(string(str_full));
+    if (str=="") return 0;
+    // Variables
+    int startWord = 0;
+    int lengthCurrWord = 0;
+    int countWords = 0;
+    bool amInBlank = false;
+    // Get words
+    for (int i=0; i < str.length(); i++) {
+        // case: reached end of a word because got to a space character
+        if (!amInBlank && str[i]==' ') {
+            // add word
+            vector.push_back(_trim(str.substr(startWord,lengthCurrWord)));
+            // update
+            countWords++;
+            lengthCurrWord = 0;
+            amInBlank = true;
+        }
+        // case: am at section with lots of spaces/blank
+        else if (amInBlank && str[i]==' ') {
+            // do nothing
+        }
+        // case: was in Blank but now got to word
+        else if (amInBlank && str[i]!=' ') {
+            amInBlank = false;
+            startWord = i;
+            lengthCurrWord = 1;
+        }
+        // case: currently inside of word
+        else if(!amInBlank  && str[i]!= ' ') {
+            lengthCurrWord++;
+        }
+
+    }
+    // case: reached end of word because reached end of string
+    countWords++;
+    vector.push_back(_trim(str.substr(startWord,lengthCurrWord)));
+    return countWords;
 }
 
 // -------------------------------
@@ -106,19 +137,60 @@ std::string _findXthWord(const std::string str_full, int x)
 
 // TODO: Add your implementation for classes in Commands.h
 
-Command::Command(const std::string cmd_line) : cmd_str(cmd_line) {
-    // initialize other fields if you write them
+Command::Command(const std::string cmd_line) : cmd_str(cmd_line), word_count(0) {
+    word_count = _fillVectorWithStrings(cmd_line, this->cmd_args);
 }
 
 Command::~Command() {
     // cleanup
 }
 
-BuiltInCommand::BuiltInCommand(const std::string cmd_line) : Command(cmd_line) {}
+// --------------------------------
+// ------- EXTERNAL COMMAND -------
+// --------------------------------
+
+ExternalCommand::ExternalCommand(const std::string cmd_line) : Command(cmd_line) {}
+
+void ExternalCommand::execute()
+{
+    // TODO: Erase this, just for checking vector is correct
+    for(std::vector<std::string>::const_iterator it = cmd_args.begin(); it != cmd_args.end(); ++it) {
+        std::cout << *it << " ";
+    }
+    std::cout << std::endl;
+    std::cout << std::to_string(this->word_count) << std::endl;
+
+
+    // Get arguments
+
+//    // Fork
+//    pid_t pid = fork();
+//    if (pid < 0) {
+//        perror("fork failed");
+//    }
+//    // CHILD
+//    else if (pid == 0) {
+//        setpgrp();
+//        const char* command = "/bin/date";
+//        char* args[] = {const_cast<char*>(command), NULL};
+//        execv(args[0], args);
+//        //std::cerr << "Error executing command\n";
+//        //exit(EXIT_FAILURE);
+//
+//    }
+//    // PARENT
+//    else {
+//        wait(NULL);
+//    }
+
+    // TODO: correct error handling and prints
+}
 
 // ----------------------------------
 // ------- BUILT IN COMMANDS -------
 // -----------------------------------
+
+BuiltInCommand::BuiltInCommand(const std::string cmd_line) : Command(cmd_line) {}
 
 // CHANGE_DIR COMMAND
 
@@ -134,12 +206,12 @@ void ChangeDirCommand::execute()
     }
 
     // See if there's a third word (illegal)
-    if (_findXthWord(this->cmd_str, 2) != "") {
+    if (this->word_count > 2) {
         std::cerr << "smash error: cd: too many arguments\n";
         return;
     }
     // See if there's only one word->"cd" (illegal?) // TODO: what to do if only get "cd" (or "cd&")?
-    std::string secondWord = _findXthWord(this->cmd_str, 1);
+    std::string secondWord = _findXthWord(this->cmd_args, 1);
 
     // See if special: second word is "-"
     if (secondWord == "-") {
@@ -228,8 +300,12 @@ void SmallShell::setPrompt(const std::string cmd_line)
     _removeBackgroundSign(clean_ptr);
     std::string clean_str(clean_ptr);
 
+    // make vector of words in prompt
+    std::vector<std::string> tmp_vector;
+    _fillVectorWithStrings(clean_str, tmp_vector);
+
     // Find second word and update smash prompt
-    std::string secondWord = _findXthWord(clean_str, 1);
+    std::string secondWord = _findXthWord(tmp_vector, 1);
     if (secondWord == "") {
         this->smashPrompt = "smash> ";
     } else {
@@ -282,13 +358,11 @@ Command * SmallShell::CreateCommand(const std::string cmd_line) {
         return new ChangeDirCommand(cmd_line, this->getLastWorkingDirectoryPointer());
     }
     // TODO: Continue with more commands here
-    /*
-    else if ...
-    .....
+
     else {
       return new ExternalCommand(cmd_line);
     }
-    */
+
     return nullptr;
 }
 

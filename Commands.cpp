@@ -128,7 +128,21 @@ int _fillVectorWithStrings(const std::string str_full, std::vector<std::string>&
     // case: reached end of word because reached end of string
     countWords++;
     vector.push_back(_trim(str.substr(startWord,lengthCurrWord)));
-    return countWords;
+    return vector.size();
+}
+
+void _vectorToCharArray(std::vector<std::string>& vector, char**& argv)
+{
+    // Copy each word into the argv array
+    int count = 0;
+    for (std::vector<std::string>::const_iterator it = vector.begin(); it != vector.end(); ++it) {
+        argv[count] = new char[(*it).size() + 1];
+        strcpy(argv[count], (*it).c_str());
+        count++;
+    }
+
+    // Set last element to NULL
+    argv[vector.size()] = NULL;
 }
 
 // -------------------------------
@@ -153,37 +167,56 @@ ExternalCommand::ExternalCommand(const std::string cmd_line) : Command(cmd_line)
 
 void ExternalCommand::execute()
 {
-    // TODO: Erase this, just for checking vector is correct
-    for(std::vector<std::string>::const_iterator it = cmd_args.begin(); it != cmd_args.end(); ++it) {
-        std::cout << *it << " ";
-    }
-    std::cout << std::endl;
-    std::cout << std::to_string(this->word_count) << std::endl;
 
+    // Just basic idea scrapped over here
+
+
+    // TODO: The following is a simple implementation for fg commands, do the rest
+    if (this->word_count < 1) {
+        std::cout << " Too few words\n"; // TODO: Erase
+        return;
+    }
 
     // Get arguments
+    char** argv = new char*[(this->cmd_args).size() + 1]; // +1 for NULL
+    _vectorToCharArray((this->cmd_args), argv);
 
-//    // Fork
-//    pid_t pid = fork();
-//    if (pid < 0) {
-//        perror("fork failed");
-//    }
-//    // CHILD
-//    else if (pid == 0) {
-//        setpgrp();
-//        const char* command = "/bin/date";
-//        char* args[] = {const_cast<char*>(command), NULL};
-//        execv(args[0], args);
-//        //std::cerr << "Error executing command\n";
-//        //exit(EXIT_FAILURE);
-//
-//    }
-//    // PARENT
-//    else {
-//        wait(NULL);
-//    }
+    // Add /bin/ to command
+    std::string command_str = "/bin/"; // TODO: Not true for all commands! Fix.
+    command_str += argv[0];
+    const char* command = command_str.c_str();
 
-    // TODO: correct error handling and prints
+    // Fork
+    pid_t pid = fork();
+    if (pid < 0) {
+        perror("fork failed");
+    }
+
+    // CHILD
+    else if (pid == 0) {
+        setpgrp();
+        char* args[] = {const_cast<char*>(command), NULL}; // TODO: Use argv() instead
+        execv(args[0], args);
+        std::cerr << "Error executing command\n";
+        // FREE
+        for (int i = 0; i < (this->cmd_args).size(); ++i) {
+            delete[] argv[i];
+        }
+        delete[] argv;
+        // EXIT ?
+        exit(EXIT_FAILURE);
+    }
+
+    // PARENT
+    else {
+        wait(NULL);
+    }
+
+    // FREE
+    for (int i = 0; i < (this->cmd_args).size(); ++i) {
+        delete[] argv[i];
+    }
+    delete[] argv;
 }
 
 // ----------------------------------
@@ -355,7 +388,7 @@ Command * SmallShell::CreateCommand(const std::string cmd_line) {
       return nullptr;
     }
     else if (firstWord_clean == "cd") {
-        return new ChangeDirCommand(cmd_line, this->getLastWorkingDirectoryPointer());
+        return new ChangeDirCommand(cmd_s_clean, this->getLastWorkingDirectoryPointer());
     }
     // TODO: Continue with more commands here
 

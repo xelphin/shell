@@ -2,14 +2,22 @@
 #define SMASH_COMMAND_H_
 
 #include <vector>
+#include <iostream>
+#include <string>
 
 #define COMMAND_ARGS_MAX_LENGTH (200)
 #define COMMAND_MAX_ARGS (20)
+#define OUTPUT_MAX_OUT (80)
 
 class Command {
-// TODO: Add your data members
+protected:
+    // TODO: Add your data members
+    std::string cmd_str;
+    int word_count;
+    std::vector<std::string> cmd_args; // vector of the arguments given to Smash
+    char* cmd_args_array[80]; // array of the arguments given to Smash, but so that it functions in External Commands
  public:
-  Command(const char* cmd_line);
+  Command(const std::string cmd_line);
   virtual ~Command();
   virtual void execute() = 0;
   //virtual void prepare();
@@ -19,13 +27,13 @@ class Command {
 
 class BuiltInCommand : public Command {
  public:
-  BuiltInCommand(const char* cmd_line);
+  BuiltInCommand(const std::string cmd_line);
   virtual ~BuiltInCommand() {}
 };
 
 class ExternalCommand : public Command {
  public:
-  ExternalCommand(const char* cmd_line);
+  ExternalCommand(const std::string cmd_line);
   virtual ~ExternalCommand() {}
   void execute() override;
 };
@@ -49,22 +57,24 @@ class RedirectionCommand : public Command {
 };
 
 class ChangeDirCommand : public BuiltInCommand {
-// TODO: Add your data members public:
-  ChangeDirCommand(const char* cmd_line, char** plastPwd);
+private:
+    std::string* lastPwd;
+public:
+  ChangeDirCommand(const std::string cmd_line, std::string* lastPwd);
   virtual ~ChangeDirCommand() {}
   void execute() override;
 };
 
 class GetCurrDirCommand : public BuiltInCommand {
  public:
-  GetCurrDirCommand(const char* cmd_line);
+  GetCurrDirCommand(const std::string cmd_line);
   virtual ~GetCurrDirCommand() {}
   void execute() override;
 };
 
 class ShowPidCommand : public BuiltInCommand {
  public:
-  ShowPidCommand(const char* cmd_line);
+  ShowPidCommand(const std::string cmd_line);
   virtual ~ShowPidCommand() {}
   void execute() override;
 };
@@ -166,10 +176,21 @@ class KillCommand : public BuiltInCommand {
 
 class SmallShell {
  private:
-  // TODO: Add your data members
+
+  // Private date members
+  std::string smashPrompt;
+  std::string lastWorkingDirectory;
+
+  // Private functions
+  void setPrompt(const std::string cmd_line);
+  std::string getLastWorkingDirectory() const;
+  std::string* getLastWorkingDirectoryPointer() {
+      return &lastWorkingDirectory;
+  }
   SmallShell();
+
  public:
-  Command *CreateCommand(const char* cmd_line);
+  Command *CreateCommand(const std::string cmd_line);
   SmallShell(SmallShell const&)      = delete; // disable copy ctor
   void operator=(SmallShell const&)  = delete; // disable = operator
   static SmallShell& getInstance() // make SmallShell singleton
@@ -179,8 +200,11 @@ class SmallShell {
     return instance;
   }
   ~SmallShell();
-  void executeCommand(const char* cmd_line);
+  void executeCommand(const std::string cmd_line);
   // TODO: add extra methods as needed
+
+  // OUR METHODS
+  std::string getSmashPrompt() const;
 };
 
 #endif //SMASH_COMMAND_H_

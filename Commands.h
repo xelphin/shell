@@ -14,8 +14,8 @@ protected:
     // TODO: Add your data members
     std::string cmd_str;
     int word_count;
-    std::vector<std::string> cmd_args;
-    char** cmd_args_array;
+    std::vector<std::string> cmd_args; // vector of the arguments given to Smash
+    char* cmd_args_array[80]; // array of the arguments given to Smash, but so that it functions in External Commands
  public:
   Command(const std::string cmd_line);
   virtual ~Command();

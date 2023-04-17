@@ -132,7 +132,19 @@ int _fillVectorWithStrings(const std::string str_full, std::vector<std::string>&
 }
 
 
-
+void _updateCommandForExternal(char* cmd_args_array[])
+{
+    // Depending on Command add necessary prefix
+    if (cmd_args_array[0] != NULL) {
+        // Make string of updated command
+        std::string updatedCommand = "/bin/"; // TODO: have more types
+        updatedCommand.append(cmd_args_array[0]);
+        // Update cmd_args_array[0] to match string
+        delete[] cmd_args_array[0];
+        cmd_args_array[0] = new char[updatedCommand.size() + 1];
+        strcpy(cmd_args_array[0], updatedCommand.c_str());
+    }
+}
 // -------------------------------
 // ------- COMMAND CLASSES -------
 // -------------------------------
@@ -141,25 +153,23 @@ int _fillVectorWithStrings(const std::string str_full, std::vector<std::string>&
 
 Command::Command(const std::string cmd_line) : cmd_str(cmd_line), word_count(0) {
     word_count = _fillVectorWithStrings(cmd_line, this->cmd_args);
-    cmd_args_array = new char*[(this->cmd_args).size() + 1]; // +1 for NULL
 
     // Create Array
     int count = 0;
-    for (std::vector<std::string>::const_iterator it = (this->cmd_args).begin(); it != (this->cmd_args).end(); ++it) {
+    for (std::vector<std::string>::const_iterator it = (this->cmd_args).begin(); it != (this->cmd_args).end() && count < 80; ++it) {
         cmd_args_array[count] = new char[(*it).size() + 1];
         strcpy(cmd_args_array[count], (*it).c_str()); // TODO: SERIOUSLY check that I'm not leaking memory everywhere
         count++;
     }
 
-    // Set last element in args to NULL
-    cmd_args_array[(this->cmd_args).size()] = NULL;
+    // Set last to be NULL
+    cmd_args_array[count] = NULL;
 }
 
 Command::~Command() {
     for (int i = 0; i < (this->cmd_args).size(); ++i) {
         delete[] cmd_args_array[i];
     }
-    delete[] cmd_args_array;
 }
 
 // --------------------------------
@@ -170,11 +180,14 @@ ExternalCommand::ExternalCommand(const std::string cmd_line) : Command(cmd_line)
 
 void ExternalCommand::execute()
 {
-    // TODO: The following is a basic implementation for commands like "/bin/date", do the rest
+    // TODO: The following is a basic implementation for commands like "date", "ls", "ls -a" that run in foreground, do the rest
     if (this->word_count < 1) {
-        std::cout << " Too few words\n"; // TODO: Erase
+        std::cout << " Too few words\n"; // TODO: Erase, figure out what should actually be printed (although should never get here)
         return;
     }
+
+    // UPDATE COMMAND
+    _updateCommandForExternal(this->cmd_args_array); // Alternatively, use execvp() instead of execv() !!!!! // TODO: use execvp() instead?
 
     // FORK
     pid_t pid = fork();
@@ -193,7 +206,8 @@ void ExternalCommand::execute()
 
     // PARENT
     else {
-        wait(NULL);
+        wait(NULL); // TODO: Implement status
+        // If in background, then don't wait
     }
 }
 

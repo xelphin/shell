@@ -40,9 +40,17 @@ public:
 };
 
 class ExternalCommand : public Command {
+private:
+    void executeSimple();
+    void executeComplex();
+    char* cmd_args_external[82];
 public:
     ExternalCommand(const char* cmd_line);
-    virtual ~ExternalCommand() {}
+    virtual ~ExternalCommand() {
+        for (int i = 0; i < (this->args_count) + 2; ++i) {
+            free(this->cmd_args_external[i]);
+        }
+    }
     void execute() override;
 };
 

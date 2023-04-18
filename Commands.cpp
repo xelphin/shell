@@ -78,6 +78,14 @@ void _removeBackgroundSign(char* cmd_line) {
     cmd_line[str.find_last_not_of(WHITESPACE, idx) + 1] = 0;
 }
 
+bool _isComplex(const char* cmd_line) {
+    const string str(cmd_line);
+    for (int i=0; i< str.size(); i++) {
+        if (str[i] == '*' || str[i] == '?') return true;
+    }
+    return false;
+}
+
 std::string _findXthWord(std::vector<std::string>& vector, int x)
 {
     int count = 0;
@@ -146,6 +154,33 @@ void _updateCommandForExternal(char* cmd_args_array[])
         strcpy(cmd_args_array[0], updatedCommand.c_str());
     }
 }
+
+void _updateCommandForExternalComplex(const char* cmd_line, char** cmd_args_external)
+{
+    // In External Command, you want the first two arguments to be "/bin/bash" and "-c" and then all the other arguments from cmd_line
+    std::string strBash = "/bin/bash";
+    std::string strC = "-c";
+    //
+    cmd_args_external[0] = (char*)malloc(strBash.length()+1);
+    memset(cmd_args_external[0], 0, strBash.length()+1);
+    strcpy(cmd_args_external[0], strBash.c_str());
+    //
+    cmd_args_external[1] = (char*)malloc(strC.length()+1);
+    memset(cmd_args_external[1], 0, strC.length()+1);
+    strcpy(cmd_args_external[1], strC.c_str());
+
+    // Copy Rest
+    int i = 2;
+    std::istringstream iss(_trim(string(cmd_line)).c_str());
+    for(std::string s; iss >> s; ) {
+        cmd_args_external[i] = (char*)malloc(s.length()+1);
+        memset(cmd_args_external[i], 0, s.length()+1);
+        strcpy(cmd_args_external[i], s.c_str());
+        cmd_args_external[++i] = NULL;
+    }
+}
+
+
 // -------------------------------
 // ------- COMMAND CLASSES -------
 // -------------------------------
@@ -170,9 +205,20 @@ Command::~Command() {
 // ------- EXTERNAL COMMAND -------
 // --------------------------------
 
-ExternalCommand::ExternalCommand(const char* cmd_line) : Command(cmd_line) {}
+ExternalCommand::ExternalCommand(const char* cmd_line) : Command(cmd_line) {
+    _updateCommandForExternalComplex(cmd_line, cmd_args_external);
+}
 
 void ExternalCommand::execute()
+{
+    if (_isComplex(this->cmd_line)) {
+        this->executeComplex();
+    } else {
+        this->executeSimple();
+    }
+}
+
+void ExternalCommand::executeSimple()
 {
     // TODO: The following is a basic implementation for commands like "date", "ls", "ls -a" that run in foreground, do the rest
     if (this->args_count < 1) {
@@ -201,6 +247,38 @@ void ExternalCommand::execute()
         // If in background, then don't wait
     }
 }
+
+void ExternalCommand::executeComplex()
+{
+    // TODO: The following is a basic implementation for commands like "date", "ls", "ls -a" that run in foreground, do the rest
+    if (this->args_count < 1) {
+        std::cout << " Too few words\n"; // TODO: Erase, figure out what should actually be printed (although should never get here)
+        return;
+    }
+
+    // FORK
+    pid_t pid = fork();
+    if (pid < 0) {
+        perror("fork failed");
+    }
+
+        // CHILD
+    else if (pid == 0) {
+        setpgrp();
+        execv(cmd_args_external[0], cmd_args_external); // works for example if you enter "date" into bash
+        std::cerr << "Error executing complex command\n";
+        // Now in child, have to free everything and exit
+        throw InvalidCommand();
+    }
+
+        // PARENT
+    else {
+        wait(NULL); // TODO: Implement status
+        std::cerr << "Finished executing complex command\n";
+        // If in background, then don't wait
+    }
+}
+
 
 // ----------------------------------
 // ------- BUILT IN COMMANDS -------

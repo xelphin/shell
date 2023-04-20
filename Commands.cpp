@@ -257,6 +257,8 @@ void ExternalCommand::execute()
 
 BuiltInCommand::BuiltInCommand(const char* cmd_line) : Command(cmd_line) {}
 
+
+
 // CHANGE_DIR COMMAND
 
 ChangeDirCommand::ChangeDirCommand(const char* cmd_line, std::string* lastPwd) : BuiltInCommand(cmd_line), lastPwd(lastPwd) {}
@@ -371,6 +373,8 @@ void SmallShell::updateFgPid(const pid_t newFgPid)
     this->fg_pid = newFgPid;
 }
 
+
+
 void SmallShell::setPrompt(const std::string cmd_line)
 {
     // Turn to char* so that can apply _removeBackgroundSign()
@@ -456,11 +460,10 @@ void SmallShell::executeCommand(const char *cmd_line) {
         try {
             this->cmd->execute();
             delete cmd;
-        } catch (const std::exception & e) {
+        } catch (const InvalidCommand & e) {
             if (this->cmd!=nullptr) delete cmd;
             throw InvalidCommand();
-        }
-
+        } 
     }
     // Please note that you must fork smash process for some commands (e.g., external commands....)
 }

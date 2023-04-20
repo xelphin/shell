@@ -10,6 +10,9 @@
 #define COMMAND_MAX_ARGS (20)
 #define OUTPUT_MAX_OUT (80)
 
+
+
+
 class InvalidCommand : public std::exception {
 public:
     const char* what() const noexcept override {
@@ -23,7 +26,6 @@ protected:
     const char* cmd_line;
     char* cmd_args[80]; // array of the arguments given to Smash, but so that it functions in External Commands
     int args_count;
-
 public:
     Command(const char* cmd_line);
     virtual ~Command();
@@ -40,9 +42,16 @@ public:
 };
 
 class ExternalCommand : public Command {
+private:
+    char* cmd_args_external[82];
 public:
     ExternalCommand(const char* cmd_line);
-    virtual ~ExternalCommand() {}
+    virtual ~ExternalCommand() {
+        // int N = (this->args_count);
+        // for (int i = 0; i < N + 2; ++i) {
+        //     free(this->cmd_args_external[i]);
+        // }
+    }
     void execute() override;
 };
 
@@ -184,10 +193,10 @@ public:
 
 class SmallShell {
 private:
-
     // Private date members
     std::string smashPrompt;
     std::string lastWorkingDirectory;
+    pid_t fg_pid = getpid();
 
     // Private functions
     void setPrompt(const std::string cmd_line);
@@ -213,6 +222,8 @@ public:
 
     // OUR METHODS
     std::string getSmashPrompt() const;
+    pid_t returnFgPid() const; 
+    void updateFgPid(const pid_t newFgPid);
 };
 
 #endif //SMASH_COMMAND_H_

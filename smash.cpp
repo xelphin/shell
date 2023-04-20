@@ -7,14 +7,15 @@
 #include "signals.h"
 #include <string>
 
-
-
 int main(int argc, char* argv[]) {
+
+
      if(signal(SIGTSTP , ctrlZHandler)==SIG_ERR) {
          perror("smash error: failed to set ctrl-Z handler");
      }
      if(signal(SIGINT , ctrlCHandler)==SIG_ERR) {
          perror("smash error: failed to set ctrl-C handler");
+         
      }
 
     //TODO: setup sig alarm handler
@@ -31,7 +32,6 @@ int main(int argc, char* argv[]) {
         } catch (const std::exception & e) {
             return -1; // TODO: Change, make this equal whatever necessary for unsuccessful execvp()
         }
-
     }
     return 0;
 }

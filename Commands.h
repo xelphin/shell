@@ -10,9 +10,6 @@
 #define COMMAND_MAX_ARGS (20)
 #define OUTPUT_MAX_OUT (80)
 
-
-
-
 class InvalidCommand : public std::exception {
 public:
     const char* what() const noexcept override {
@@ -197,6 +194,7 @@ private:
     std::string smashPrompt;
     std::string lastWorkingDirectory;
     pid_t fg_pid = getpid();
+    Command* cmd = nullptr;
 
     // Private functions
     void setPrompt(const std::string cmd_line);

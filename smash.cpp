@@ -29,9 +29,11 @@ int main(int argc, char* argv[]) {
         std::getline(std::cin, cmd_line);
         try {
             smash.executeCommand(cmd_line.c_str());
-        } catch (const std::exception & e) {
+        } catch (const InvalidCommand& e) {
+            // InvalidCommand
             return -1; // TODO: Change, make this equal whatever necessary for unsuccessful execvp()
         }
+        
     }
     return 0;
 }

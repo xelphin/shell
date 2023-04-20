@@ -238,8 +238,7 @@ void ExternalCommand::execute()
         // }
         execvp(this->cmd_args[0], this->cmd_args); // TODO: erase
         std::cerr << "Error executing command\n";
-        // Now in child, have to free everything and exit
-        throw InvalidCommand();
+       throw InvalidCommand();
     }
 
     // PARENT
@@ -355,10 +354,7 @@ SmallShell::SmallShell() {
     this->lastWorkingDirectory = ""; // uninitialized
 }
 
-SmallShell::~SmallShell() {
-    // TODO: add your implementation
-    
-}
+SmallShell::~SmallShell() {}
 
 std::string SmallShell::getSmashPrompt() const
 {
@@ -456,16 +452,17 @@ Command * SmallShell::CreateCommand(const char *cmd_line) {
 // -------------------------------
 
 void SmallShell::executeCommand(const char *cmd_line) {
-    Command* cmd = CreateCommand(cmd_line);
-    if (cmd!=nullptr) {
+    this->cmd = CreateCommand(cmd_line);
+    if (this->cmd!=nullptr) {
         try {
-            cmd->execute();
-        }catch (const std::exception & e) {
+            this->cmd->execute();
             delete cmd;
+        } catch (const std::exception & e) {
+            if (this->cmd!=nullptr) delete cmd;
             throw InvalidCommand();
         }
+
     }
-    if (cmd!=nullptr) delete cmd;
     // Please note that you must fork smash process for some commands (e.g., external commands....)
 }
 

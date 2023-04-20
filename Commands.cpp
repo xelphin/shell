@@ -207,7 +207,7 @@ Command::~Command() {
 // --------------------------------
 
 ExternalCommand::ExternalCommand(const char* cmd_line) : Command(cmd_line) {
-    //_updateCommandForExternalComplex(cmd_line, cmd_args_external);
+    _updateCommandForExternalComplex(cmd_line, cmd_args_external);
 }
 
 void ExternalCommand::execute()
@@ -227,16 +227,15 @@ void ExternalCommand::execute()
         // CHILD
     else if (pid == 0) {
         setpgrp();
-        // if (_isComplex(this->cmd_line)) {
-        //     // Is COMPLEX
-        //     std::cout << "Is Complex\n";
-        //     //execv(cmd_args_external[0], cmd_args_external);
-        // } else {
-        //     // Is SIMPLE
-        //     std::cout << "Is Simple\n";
-        //     execvp(this->cmd_args[0], this->cmd_args);
-        // }
-        execvp(this->cmd_args[0], this->cmd_args); // TODO: erase
+        if (_isComplex(this->cmd_line)) {
+            // Is COMPLEX
+            std::cout << "Is Complex\n";
+            execv(cmd_args_external[0], cmd_args_external);
+        } else {
+            // Is SIMPLE
+            std::cout << "Is Simple\n";
+            execvp(this->cmd_args[0], this->cmd_args);
+        }
         std::cerr << "Error executing command\n";
        throw InvalidCommand();
     }

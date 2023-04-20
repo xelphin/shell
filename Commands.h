@@ -45,10 +45,10 @@ private:
 public:
     ExternalCommand(const char* cmd_line);
     virtual ~ExternalCommand() {
-        // int N = (this->args_count);
-        // for (int i = 0; i < N + 2; ++i) {
-        //     free(this->cmd_args_external[i]);
-        // }
+        int N = (this->args_count);
+        for (int i = 0; i < N + 2; ++i) {
+            free(this->cmd_args_external[i]);
+        }
     }
     void execute() override;
 };

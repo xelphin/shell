@@ -6,7 +6,6 @@
 #include <string>
 #include <exception>
 #include <unistd.h>
-#include <memory>
 
 #define COMMAND_ARGS_MAX_LENGTH (200)
 #define COMMAND_MAX_ARGS (20)
@@ -115,18 +114,19 @@ public:
     // JobEntry holds data about Job
     class JobEntry {
             pid_t m_pid;
-            const char* m_cmd_line;
+            std::string m_cmd_line;
             int m_Running;
             bool m_isStopped;
         public:
-            JobEntry(pid_t pid, const char* cmd_line, bool isStopped );
+            JobEntry(const pid_t pid, std::string cmd_line, bool isStopped );
             ~JobEntry() {};
+            std::string getCmdLine();
     };
-    std::vector<JobEntry> jobs_vector;
+    std::vector<JobEntry> jobs_vector ;
 public:
-    JobsList() {};
+    JobsList();
     ~JobsList() {};
-    void addJob(pid_t pid, const char* cmd_line, bool isStopped = false);
+    void addJob(const pid_t pid, std::string cmd_line, bool isStopped = false);
     void printJobsList();
     void killAllJobs();
     void removeFinishedJobs();
@@ -209,7 +209,7 @@ private:
     std::string lastWorkingDirectory;
     pid_t fg_pid = getpid();
     Command* cmd = nullptr;
-    std::unique_ptr<JobsList> jobList;
+    JobsList* jobList;
 
     // Private functions
     void setPrompt(const std::string cmd_line);
@@ -237,6 +237,7 @@ public:
     std::string getSmashPrompt() const;
     pid_t returnFgPid() const; 
     void updateFgPid(const pid_t newFgPid);
+    void addJob(pid_t pid, std::string cmd_line, bool isStopped);
 };
 
 #endif //SMASH_COMMAND_H_

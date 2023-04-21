@@ -247,13 +247,30 @@ Command::~Command() {
 // ------- JOB LIST --------------
 // -------------------------------
 
-JobsList::JobEntry::JobEntry(pid_t pid, const char* cmd_line, bool isStopped ) : m_pid(pid), m_cmd_line(cmd_line), m_isStopped(isStopped)  {
+JobsList::JobEntry::JobEntry(const pid_t pid, std::string cmd_line, bool isStopped ) : m_pid(pid), m_cmd_line(cmd_line), m_isStopped(isStopped)  {
     
 }
 
-void JobsList::addJob(pid_t pid, const char* cmd_line, bool isStopped)
+std::string JobsList::JobEntry::getCmdLine()
+{
+    return this->m_cmd_line;
+}
+
+JobsList::JobsList() : jobs_vector()
+{}
+
+void JobsList::addJob(const pid_t pid, std::string cmd_line, bool isStopped) 
 {
     (this->jobs_vector).push_back(JobEntry(pid, cmd_line, isStopped));
+}
+
+void JobsList::printJobsList()
+{
+    int count = 1;
+    for (std::vector<JobEntry>::iterator it = jobs_vector.begin(); it != jobs_vector.end(); ++it){
+        std::cout << "[" << std::to_string(count) <<"]" << it->getCmdLine() << std::endl;
+        count++;
+    }
 }
 
 // --------------------------------
@@ -296,14 +313,20 @@ void ExternalCommand::execute()
 
     // PARENT
     else {
-        // Update Foreground PID of Smash
         SmallShell& smash = SmallShell::getInstance();
-        // foreground command is the child PID
+
+        // BACKGROUND
         if (this->isBackground) {
             std::cout << "Background Command, adding to JobList\n";
-            // TODO, add to JobList
-        } else {
-            smash.updateFgPid(pid); 
+            // Notice: If invalid background command, then instantly waitpid() finishes and removes it TODO
+            smash.addJob(pid, cmd_line, false); 
+        } 
+
+        // FOREGROUND
+        else {
+            // Update Foreground PID to be that of Child
+            smash.updateFgPid(pid);
+            // Wait for child to finish/get signal
             if (waitpid(pid, &stat, WUNTRACED | WCONTINUED) < 0) {
                 perror("wait failed");
             } else {
@@ -317,6 +340,7 @@ void ExternalCommand::execute()
                 }
             }
         }
+
         // Update Foreground PID of Smash
         smash.updateFgPid(getpid()); // child is dead, so change back foreground to mean smash process again
         // If in background, then don't wait!
@@ -425,9 +449,12 @@ SmallShell::SmallShell() {
 // TODO: add your implementation
     this->smashPrompt = "smash> ";
     this->lastWorkingDirectory = ""; // uninitialized
+    this->jobList = new JobsList();
 }
 
-SmallShell::~SmallShell() {}
+SmallShell::~SmallShell() {
+    if (this->jobList!=nullptr) delete jobList;
+}
 
 std::string SmallShell::getSmashPrompt() const
 {
@@ -474,6 +501,16 @@ void SmallShell::setPrompt(const std::string cmd_line)
 std::string SmallShell::getLastWorkingDirectory() const
 {
     return this->lastWorkingDirectory;
+}
+
+void SmallShell::addJob(pid_t pid, const std::string cmd_line, bool isStopped)
+{
+    if (jobList == nullptr) { // TODO: erase this, or make a throw
+        std::cout << "You accidentaly erased JobList!\n";
+        return;
+    }
+    jobList->addJob(pid, cmd_line, isStopped);
+    jobList->printJobsList(); // TODO: delete, just for debugging
 }
 
 

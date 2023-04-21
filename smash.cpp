@@ -30,9 +30,7 @@ int main(int argc, char* argv[]) {
         try {
             smash.executeCommand(cmd_line.c_str());
         } catch (const InvalidCommand& e) {
-            std::cout << "caught invalid command\n";
-            // InvalidCommand
-            return -1; // TODO: Change, make this equal whatever necessary for unsuccessful execvp()
+            return 127; 
         }
     }
     return 0;

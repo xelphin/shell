@@ -99,6 +99,29 @@ std::string _findXthWord(std::vector<std::string>& vector, int x)
     return "";
 }
 
+void _chkStatus(int pid, int stat)
+{
+if (WIFEXITED(stat)) {
+    int exit_status = WEXITSTATUS(stat);
+    if (exit_status == 127) {
+        // Child returned 127 (INVALID COMMAND)
+        std::cout << "Child returned 127\n";
+    } else {
+        // Child returned a non-127 status
+        std::cout << "Child returned " << exit_status << "\n";
+    }
+    } else if (WIFSIGNALED(stat)) {
+        int signal_number = WTERMSIG(stat);
+        if (signal_number == SIGINT) {
+            std::cout << "Child was terminated by a SIGINT signal\n";
+        } else {
+            std::cout << "Child was terminated by signal " << signal_number << "\n";
+        }
+    } else {
+        std::cerr << "Child terminated abnormally\n";
+    }
+}
+
 int _fillVectorWithStrings(const std::string str_full, std::vector<std::string>& vector)
 {
     std::string str = _trim(string(str_full));
@@ -189,17 +212,47 @@ void _updateCommandForExternalComplex(const char* cmd_line, char** cmd_args_exte
 // TODO: Add your implementation for classes in Commands.h
 
 Command::Command(const char* cmd_line) : cmd_line(cmd_line), args_count(0) {
-    //word_count = _fillVectorWithStrings(cmd_line, this->cmd_args);
+    this->isBackground = _isBackgroundComamnd(cmd_line);
     this->args_count = _parseCommandLine(this->cmd_line, this->cmd_args);
 
     // Set last to be NULL
     this->cmd_args[this->args_count + 1] = NULL;
+
+    // CLEAN VERSION
+    string cmd_s = _trim(string(cmd_line));
+    if (cmd_s != "") {
+        // Clean (without &) versions of cmd_s and firstWord
+        char* clean_ptr = new char[cmd_s.length() + 1];
+        strcpy(clean_ptr, cmd_s.c_str());
+        _removeBackgroundSign(clean_ptr);
+        this->cmd_line_clean = clean_ptr;
+        this->args_count_clean = _parseCommandLine(this->cmd_line_clean, this->cmd_args_clean);
+        // Set last to be NULL
+        this->cmd_args_clean[this->args_count_clean + 1] = NULL;
+    }
 }
 
 Command::~Command() {
     for (int i = 0; i < (this->args_count); ++i) {
         free(this->cmd_args[i]);
     }
+    for (int i = 0; i < (this->args_count_clean); ++i) {
+        free(this->cmd_args_clean[i]);
+    }
+    delete[] cmd_line_clean;
+}
+
+// -------------------------------
+// ------- JOB LIST --------------
+// -------------------------------
+
+JobsList::JobEntry::JobEntry(pid_t pid, const char* cmd_line, bool isStopped ) : m_pid(pid), m_cmd_line(cmd_line), m_isStopped(isStopped)  {
+    
+}
+
+void JobsList::addJob(pid_t pid, const char* cmd_line, bool isStopped)
+{
+    (this->jobs_vector).push_back(JobEntry(pid, cmd_line, isStopped));
 }
 
 // --------------------------------
@@ -207,14 +260,15 @@ Command::~Command() {
 // --------------------------------
 
 ExternalCommand::ExternalCommand(const char* cmd_line) : Command(cmd_line) {
-    _updateCommandForExternalComplex(cmd_line, cmd_args_external);
+    _updateCommandForExternalComplex(cmd_line_clean, cmd_args_clean_external);
 }
 
 void ExternalCommand::execute()
 {
+    int stat;
     // TODO: The following is a basic implementation for commands like "date", "ls", "ls -a" that run in foreground, do the rest
     if (this->args_count < 1) {
-        std::cout << " Too few words adshfjasdfk\n"; // TODO: Erase, figure out what should actually be printed (although should never get here)
+        std::cout << " Too few words\n"; // TODO: Erase, figure out what should actually be printed (although should never get here)
         return;
     }
 
@@ -230,22 +284,38 @@ void ExternalCommand::execute()
         if (_isComplex(this->cmd_line)) {
             // Is COMPLEX
             std::cout << "Is Complex\n";
-            execv(cmd_args_external[0], cmd_args_external);
+            execv(cmd_args_clean_external[0], cmd_args_clean_external);
         } else {
             // Is SIMPLE
             std::cout << "Is Simple\n";
-            execvp(this->cmd_args[0], this->cmd_args);
+            execvp(this->cmd_args_clean[0], this->cmd_args_clean);
         }
         std::cerr << "Error executing command\n";
-       throw InvalidCommand();
+        throw InvalidCommand();
     }
 
     // PARENT
     else {
+        // Update Foreground PID of Smash
         SmallShell& smash = SmallShell::getInstance();
         smash.updateFgPid(pid); // foreground command is the child PID
-        wait(NULL); // TODO: Implement status
-        std::cout << "Child: " << cmd_line << ", finished\n"; // TODO: delete
+
+
+        if (wait(&stat) <0) {
+            perror("wait failed");
+        } else {
+            _chkStatus(pid, stat);
+            std::cout << "my status: " << std::to_string(stat) << std::endl;
+            if (WEXITSTATUS(stat) == 127) {
+                // Valid Command
+                std::cout << "INVALID COMMAND\n"; // TODO: Edit this
+
+            }
+        }
+
+
+        // Update Foreground PID of Smash
+        std::cout << "Child: " << cmd_line_clean << ", finished\n"; // TODO: delete
         smash.updateFgPid(getpid()); // child is dead, so change back foreground to mean smash process again
         // If in background, then don't wait!
     }
@@ -415,6 +485,7 @@ Command * SmallShell::CreateCommand(const char *cmd_line) {
     // Get first word (command)
     string cmd_s = _trim(string(cmd_line));
     string firstWord = cmd_s.substr(0, cmd_s.find_first_of(" \n"));
+    
 
     if (cmd_s == "") return nullptr; // TODO: Not sure what they want us to do in this case, but this works for now,update if needed
 

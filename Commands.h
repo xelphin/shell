@@ -6,6 +6,7 @@
 #include <string>
 #include <exception>
 #include <unistd.h>
+#include <memory>
 
 #define COMMAND_ARGS_MAX_LENGTH (200)
 #define COMMAND_MAX_ARGS (20)
@@ -20,10 +21,15 @@ public:
 
 class Command {
 protected:
-    // TODO: Add your data members
+    bool isBackground;
     const char* cmd_line;
     char* cmd_args[80]; // array of the arguments given to Smash, but so that it functions in External Commands
     int args_count;
+    // CLEAN (ignoring &)
+    const char* cmd_line_clean;
+    char* cmd_args_clean[80];
+    int args_count_clean;
+    //
 public:
     Command(const char* cmd_line);
     virtual ~Command();
@@ -41,13 +47,13 @@ public:
 
 class ExternalCommand : public Command {
 private:
-    char* cmd_args_external[82];
+    char* cmd_args_clean_external[82];
 public:
     ExternalCommand(const char* cmd_line);
     virtual ~ExternalCommand() {
-        int N = (this->args_count);
+        int N = (this->args_count_clean);
         for (int i = 0; i < N + 2; ++i) {
-            free(this->cmd_args_external[i]);
+            free(this->cmd_args_clean_external[i]);
         }
     }
     void execute() override;
@@ -106,14 +112,21 @@ public:
 
 class JobsList {
 public:
+    // JobEntry holds data about Job
     class JobEntry {
-        // TODO: Add your data members
+            pid_t m_pid;
+            const char* m_cmd_line;
+            int m_Running;
+            bool m_isStopped;
+        public:
+            JobEntry(pid_t pid, const char* cmd_line, bool isStopped );
+            ~JobEntry() {};
     };
-    // TODO: Add your data members
+    std::vector<JobEntry> jobs_vector;
 public:
-    JobsList();
-    ~JobsList();
-    void addJob(Command* cmd, bool isStopped = false);
+    JobsList() {};
+    ~JobsList() {};
+    void addJob(pid_t pid, const char* cmd_line, bool isStopped = false);
     void printJobsList();
     void killAllJobs();
     void removeFinishedJobs();
@@ -196,6 +209,7 @@ private:
     std::string lastWorkingDirectory;
     pid_t fg_pid = getpid();
     Command* cmd = nullptr;
+    std::unique_ptr<JobsList> jobList;
 
     // Private functions
     void setPrompt(const std::string cmd_line);

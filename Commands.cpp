@@ -340,9 +340,14 @@ bool JobsList::jobExists(int jobId, std::string& job_cmd, pid_t& job_pid, bool r
     }
     int vectorSize = ( this->jobs_vector).size();
     if (indexJobId >= 0 && indexJobId < vectorSize) {
-        job_cmd = jobs_vector[indexJobId].m_cmd_line;
-        job_pid = jobs_vector[indexJobId].m_pid;
-        // (this->jobs_vector).erase((this->jobs_vector).begin() + jobId); DON'T DO THIS HERE!
+        if (!removeLast) {
+            job_cmd = jobs_vector[indexJobId].m_cmd_line;
+            job_pid = jobs_vector[indexJobId].m_pid;
+        }
+        else {
+            job_cmd = jobs_vector[vectorSize-1].m_cmd_line;
+            job_pid = jobs_vector[vectorSize-1].m_pid;
+        }
         return true;
     }
     if (indexJobId < 0 || indexJobId >= vectorSize) {
@@ -353,25 +358,16 @@ bool JobsList::jobExists(int jobId, std::string& job_cmd, pid_t& job_pid, bool r
     return false;
 }
 
-bool JobsList::removeJobById(int jobId, std::string& job_cmd, pid_t& job_pid, bool removeLast)
+bool JobsList::removeJobByPID(pid_t job_pid)
 {
-    int indexJobId = jobId-1;
-    if (jobs_vector.empty() && removeLast) {
-        std::cerr << "smash error: fg: jobs list is empty\n";
-        return false;
+    for (std::vector<JobEntry>::iterator it = jobs_vector.begin(); it != jobs_vector.end();){
+        if (it->m_pid == job_pid) {
+            it = jobs_vector.erase(it);
+            return true;
+        } else {
+            ++it;
+        }
     }
-    int vectorSize = ( this->jobs_vector).size();
-    if (indexJobId >= 0 && indexJobId < vectorSize) {
-        job_cmd = jobs_vector[indexJobId].m_cmd_line;
-        job_pid = jobs_vector[indexJobId].m_pid;
-        (this->jobs_vector).erase((this->jobs_vector).begin() + jobId); 
-        return true;
-    }
-    if (indexJobId < 0 || indexJobId >= vectorSize) {
-        std::cerr << "smash error: fg: job-id "<< std::to_string(jobId) <<" does not exist\n";
-
-    }
-    // TODO: Remove last job
     return false;
 }
 
@@ -509,11 +505,7 @@ void ForegroundCommand::execute()
     // If in background, then don't wait!
 
     // REMOVE
-    if (args_count_clean != 1) {
-        p_jobList->removeJobById(std::stoi(cmd_args_clean[1]), job_cmd, job_pid, false);
-    } else {
-        // TODO: Implement with input just "fg"
-    }
+    p_jobList->removeJobByPID(job_pid);
 }
 
 // JOBS COMMAND

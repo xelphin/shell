@@ -131,8 +131,8 @@ public:
     void killAllZombies();
     void killAllJobs();
     JobEntry * getJobById(int jobId);
-    bool jobExists(int jobId, std::string& job_cmd, pid_t& job_pid, bool removeLast = false);
-    bool removeJobById(int jobId, std::string& job_cmd, pid_t& job_pid, bool removeLast = false);
+    bool jobExists(int jobId, std::string& job_cmd, pid_t& job_pid, bool removeLast);
+    bool removeJobByPID(pid_t job_pid);
     JobEntry * getLastJob(int* lastJobId);
     JobEntry *getLastStoppedJob(int *jobId);
     // TODO: Add extra methods or modify exisitng ones as needed

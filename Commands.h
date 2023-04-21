@@ -130,9 +130,9 @@ public:
     void printJobsList();
     void killAllZombies();
     void killAllJobs();
-    void removeFinishedJobs();
     JobEntry * getJobById(int jobId);
-    void removeJobById(int jobId);
+    bool jobExists(int jobId, std::string& job_cmd, pid_t& job_pid, bool removeLast);
+    bool removeJobByPID(pid_t job_pid);
     JobEntry * getLastJob(int* lastJobId);
     JobEntry *getLastStoppedJob(int *jobId);
     // TODO: Add extra methods or modify exisitng ones as needed
@@ -147,7 +147,7 @@ public:
 };
 
 class ForegroundCommand : public BuiltInCommand {
-    // TODO: Add your data members
+    JobsList* p_jobList;
 public:
     ForegroundCommand(const char* cmd_line, JobsList* jobs);
     virtual ~ForegroundCommand() {}

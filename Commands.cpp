@@ -213,8 +213,9 @@ void _updateCommandForExternalComplex(const char* cmd_line, char** cmd_args_exte
 
 Command::Command(const char* cmd_line) : cmd_line(cmd_line), args_count(0) {
     this->isBackground = _isBackgroundComamnd(cmd_line);
-    this->args_count = _parseCommandLine(this->cmd_line, this->cmd_args);
 
+    // WITH & version
+    this->args_count = _parseCommandLine(this->cmd_line, this->cmd_args);
     // Set last to be NULL
     this->cmd_args[this->args_count + 1] = NULL;
 
@@ -287,7 +288,6 @@ void ExternalCommand::execute()
             execv(cmd_args_clean_external[0], cmd_args_clean_external);
         } else {
             // Is SIMPLE
-            std::cout << "Is Simple\n";
             execvp(this->cmd_args_clean[0], this->cmd_args_clean);
         }
         std::cerr << "Error executing command\n";
@@ -298,24 +298,26 @@ void ExternalCommand::execute()
     else {
         // Update Foreground PID of Smash
         SmallShell& smash = SmallShell::getInstance();
-        smash.updateFgPid(pid); // foreground command is the child PID
-
-
-        if (wait(&stat) <0) {
-            perror("wait failed");
+        // foreground command is the child PID
+        if (this->isBackground) {
+            std::cout << "Background Command, adding to JobList\n";
+            // TODO, add to JobList
         } else {
-            _chkStatus(pid, stat);
-            std::cout << "my status: " << std::to_string(stat) << std::endl;
-            if (WEXITSTATUS(stat) == 127) {
-                // Valid Command
-                std::cout << "INVALID COMMAND\n"; // TODO: Edit this
+            smash.updateFgPid(pid); 
+            if (waitpid(pid, &stat, WUNTRACED | WCONTINUED) < 0) {
+                perror("wait failed");
+            } else {
+                std::cout << "Child: " << cmd_line_clean << ", finished\n"; // TODO: delete
+                _chkStatus(pid, stat);
+                std::cout << "my status: " << std::to_string(stat) << std::endl;
+                if (WEXITSTATUS(stat) == 127) {
+                    // Valid Command
+                    std::cout << "INVALID COMMAND\n"; // TODO: Edit this
 
+                }
             }
         }
-
-
         // Update Foreground PID of Smash
-        std::cout << "Child: " << cmd_line_clean << ", finished\n"; // TODO: delete
         smash.updateFgPid(getpid()); // child is dead, so change back foreground to mean smash process again
         // If in background, then don't wait!
     }

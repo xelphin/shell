@@ -213,8 +213,9 @@ void _updateCommandForExternalComplex(const char* cmd_line, char** cmd_args_exte
 
 Command::Command(const char* cmd_line) : cmd_line(cmd_line), args_count(0) {
     this->isBackground = _isBackgroundComamnd(cmd_line);
-    this->args_count = _parseCommandLine(this->cmd_line, this->cmd_args);
 
+    // WITH & version
+    this->args_count = _parseCommandLine(this->cmd_line, this->cmd_args);
     // Set last to be NULL
     this->cmd_args[this->args_count + 1] = NULL;
 
@@ -246,13 +247,61 @@ Command::~Command() {
 // ------- JOB LIST --------------
 // -------------------------------
 
-JobsList::JobEntry::JobEntry(pid_t pid, const char* cmd_line, bool isStopped ) : m_pid(pid), m_cmd_line(cmd_line), m_isStopped(isStopped)  {
-    
+JobsList::JobEntry::JobEntry(const pid_t pid, std::string cmd_line, bool isStopped ) : m_pid(pid), m_cmd_line(cmd_line), m_isStopped(isStopped)  {
+    m_init = std::time(nullptr);
 }
 
-void JobsList::addJob(pid_t pid, const char* cmd_line, bool isStopped)
+JobsList::JobsList() : jobs_vector()
+{}
+
+void JobsList::addJob(const pid_t pid, std::string cmd_line, bool isStopped) 
 {
     (this->jobs_vector).push_back(JobEntry(pid, cmd_line, isStopped));
+}
+
+void JobsList::printJobsList()
+{
+    this->killAllZombies();
+    int count = 1;
+    for (std::vector<JobEntry>::iterator it = jobs_vector.begin(); it != jobs_vector.end(); ++it){
+        std::cout << "[" << std::to_string(count) <<"]" << it->m_cmd_line << ":" << std::to_string(it->m_pid)<< " ";
+        std::time_t time_now = std::time(nullptr);
+        int elapsed_seconds = std::difftime(time_now, it->m_init);
+        std::cout << std::to_string(elapsed_seconds) << std::endl;
+        count++;
+    }
+}
+
+void JobsList::killAllZombies()
+{
+    for (std::vector<JobEntry>::iterator it = jobs_vector.begin(); it != jobs_vector.end();) {
+        int status;
+        pid_t pid = it->m_pid;
+
+        // If zombie then free
+        int res = waitpid(pid, &status, WNOHANG);
+        if (res == -1) {
+            // Error occurred
+            std::cerr << "waitpid() failed " << pid << std::endl;
+            it++;
+        }
+        else if (res == 0) {
+            // Job is not a zombie
+            it++;
+        }
+        else if (WIFEXITED(status) || WIFSIGNALED(status)) {
+            // Child process has exited or was terminated by a signal
+            // Free its PID
+            std::cout << "killing zombie: " << it->m_cmd_line << std::endl;
+            int status;
+            waitpid(pid, &status, WUNTRACED);
+            it = jobs_vector.erase(it);
+        }
+        else {
+            std::cerr << "waitpid() got unknown status " << pid << std::endl;
+            it++;
+        }
+    }
 }
 
 // --------------------------------
@@ -278,7 +327,7 @@ void ExternalCommand::execute()
         perror("fork failed");
     }
 
-        // CHILD
+    // CHILD
     else if (pid == 0) {
         setpgrp();
         if (_isComplex(this->cmd_line)) {
@@ -287,35 +336,46 @@ void ExternalCommand::execute()
             execv(cmd_args_clean_external[0], cmd_args_clean_external);
         } else {
             // Is SIMPLE
-            std::cout << "Is Simple\n";
             execvp(this->cmd_args_clean[0], this->cmd_args_clean);
         }
+        // INVALID COMMAND
         std::cerr << "Error executing command\n";
+        // If has &, it was added wrongfully to joblist, so need to remove TODO 
+        // (but also, maybe invalid commands isn't something we need to support)
         throw InvalidCommand();
     }
 
     // PARENT
     else {
-        // Update Foreground PID of Smash
         SmallShell& smash = SmallShell::getInstance();
-        smash.updateFgPid(pid); // foreground command is the child PID
 
+        // BACKGROUND
+        if (this->isBackground) {
+            std::cout << "Background Command, adding to JobList\n";
+            // Notice: If invalid background command, then instantly waitpid() finishes and removes it TODO
+            smash.addJob(pid, cmd_line, false); 
+        } 
 
-        if (wait(&stat) <0) {
-            perror("wait failed");
-        } else {
-            _chkStatus(pid, stat);
-            std::cout << "my status: " << std::to_string(stat) << std::endl;
-            if (WEXITSTATUS(stat) == 127) {
-                // Valid Command
-                std::cout << "INVALID COMMAND\n"; // TODO: Edit this
+        // FOREGROUND
+        else {
+            // Update Foreground PID to be that of Child
+            smash.updateFgPid(pid);
+            // Wait for child to finish/get signal
+            if (waitpid(pid, &stat, WUNTRACED | WCONTINUED) < 0) {
+                perror("wait failed");
+            } else {
+                std::cout << "Child: " << cmd_line_clean << ", finished\n"; // TODO: delete
+                _chkStatus(pid, stat);
+                std::cout << "my status: " << std::to_string(stat) << std::endl;
+                if (WEXITSTATUS(stat) == 127) {
+                    // Valid Command
+                    std::cout << "INVALID COMMAND\n"; // TODO: Edit this
 
+                }
             }
         }
 
-
         // Update Foreground PID of Smash
-        std::cout << "Child: " << cmd_line_clean << ", finished\n"; // TODO: delete
         smash.updateFgPid(getpid()); // child is dead, so change back foreground to mean smash process again
         // If in background, then don't wait!
     }
@@ -327,7 +387,14 @@ void ExternalCommand::execute()
 
 BuiltInCommand::BuiltInCommand(const char* cmd_line) : Command(cmd_line) {}
 
+// JOBS COMMAND
 
+JobsCommand::JobsCommand(const char* cmd_line, JobsList* jobs) : BuiltInCommand(cmd_line), p_jobList(jobs) {}
+
+void JobsCommand::execute()
+{
+    this->p_jobList->printJobsList();
+}
 
 // CHANGE_DIR COMMAND
 
@@ -423,9 +490,12 @@ SmallShell::SmallShell() {
 // TODO: add your implementation
     this->smashPrompt = "smash> ";
     this->lastWorkingDirectory = ""; // uninitialized
+    this->jobList = new JobsList();
 }
 
-SmallShell::~SmallShell() {}
+SmallShell::~SmallShell() {
+    if (this->jobList!=nullptr) delete jobList;
+}
 
 std::string SmallShell::getSmashPrompt() const
 {
@@ -474,6 +544,16 @@ std::string SmallShell::getLastWorkingDirectory() const
     return this->lastWorkingDirectory;
 }
 
+void SmallShell::addJob(pid_t pid, const std::string cmd_line, bool isStopped)
+{
+    if (jobList == nullptr) { // TODO: erase this, or make a throw
+        std::cout << "You accidentaly erased JobList!\n";
+        return;
+    }
+    jobList->addJob(pid, cmd_line, isStopped);
+    // jobList->printJobsList(); // TODO: delete, just for debugging
+}
+
 
 /**
 * Creates and returns a pointer to Command class which matches the given command line (cmd_line)
@@ -511,6 +591,9 @@ Command * SmallShell::CreateCommand(const char *cmd_line) {
     }
     else if (firstWord_clean == "cd") {
         return new ChangeDirCommand(cmd_s_clean.c_str(), this->getLastWorkingDirectoryPointer());
+    }
+    else if (firstWord_clean == "jobs") {
+        return new JobsCommand(cmd_s_clean.c_str(), this->jobList);
     }
         // TODO: Continue with more commands here
 

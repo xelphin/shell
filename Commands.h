@@ -6,7 +6,7 @@
 #include <string>
 #include <exception>
 #include <unistd.h>
-#include <memory>
+#include <ctime>
 
 #define COMMAND_ARGS_MAX_LENGTH (200)
 #define COMMAND_MAX_ARGS (20)
@@ -114,20 +114,21 @@ class JobsList {
 public:
     // JobEntry holds data about Job
     class JobEntry {
-            pid_t m_pid;
-            const char* m_cmd_line;
-            int m_Running;
-            bool m_isStopped;
         public:
-            JobEntry(pid_t pid, const char* cmd_line, bool isStopped );
+            pid_t m_pid;
+            std::string m_cmd_line;
+            std::time_t m_init;
+            bool m_isStopped;
+            JobEntry(const pid_t pid, std::string cmd_line, bool isStopped );
             ~JobEntry() {};
     };
-    std::vector<JobEntry> jobs_vector;
+    std::vector<JobEntry> jobs_vector ;
 public:
-    JobsList() {};
+    JobsList();
     ~JobsList() {};
-    void addJob(pid_t pid, const char* cmd_line, bool isStopped = false);
+    void addJob(const pid_t pid, std::string cmd_line, bool isStopped = false);
     void printJobsList();
+    void killAllZombies();
     void killAllJobs();
     void removeFinishedJobs();
     JobEntry * getJobById(int jobId);
@@ -138,7 +139,7 @@ public:
 };
 
 class JobsCommand : public BuiltInCommand {
-    // TODO: Add your data members
+    JobsList* p_jobList;
 public:
     JobsCommand(const char* cmd_line, JobsList* jobs);
     virtual ~JobsCommand() {}
@@ -209,7 +210,7 @@ private:
     std::string lastWorkingDirectory;
     pid_t fg_pid = getpid();
     Command* cmd = nullptr;
-    std::unique_ptr<JobsList> jobList;
+    JobsList* jobList;
 
     // Private functions
     void setPrompt(const std::string cmd_line);
@@ -237,6 +238,7 @@ public:
     std::string getSmashPrompt() const;
     pid_t returnFgPid() const; 
     void updateFgPid(const pid_t newFgPid);
+    void addJob(pid_t pid, std::string cmd_line, bool isStopped);
 };
 
 #endif //SMASH_COMMAND_H_

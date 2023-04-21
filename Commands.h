@@ -6,6 +6,7 @@
 #include <string>
 #include <exception>
 #include <unistd.h>
+#include <ctime>
 
 #define COMMAND_ARGS_MAX_LENGTH (200)
 #define COMMAND_MAX_ARGS (20)
@@ -113,14 +114,13 @@ class JobsList {
 public:
     // JobEntry holds data about Job
     class JobEntry {
+        public:
             pid_t m_pid;
             std::string m_cmd_line;
-            int m_Running;
+            std::time_t m_init;
             bool m_isStopped;
-        public:
             JobEntry(const pid_t pid, std::string cmd_line, bool isStopped );
             ~JobEntry() {};
-            std::string getCmdLine();
     };
     std::vector<JobEntry> jobs_vector ;
 public:
@@ -128,6 +128,7 @@ public:
     ~JobsList() {};
     void addJob(const pid_t pid, std::string cmd_line, bool isStopped = false);
     void printJobsList();
+    void killAllZombies();
     void killAllJobs();
     void removeFinishedJobs();
     JobEntry * getJobById(int jobId);

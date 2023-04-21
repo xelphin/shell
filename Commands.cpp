@@ -248,12 +248,7 @@ Command::~Command() {
 // -------------------------------
 
 JobsList::JobEntry::JobEntry(const pid_t pid, std::string cmd_line, bool isStopped ) : m_pid(pid), m_cmd_line(cmd_line), m_isStopped(isStopped)  {
-    
-}
-
-std::string JobsList::JobEntry::getCmdLine()
-{
-    return this->m_cmd_line;
+    m_init = std::time(nullptr);
 }
 
 JobsList::JobsList() : jobs_vector()
@@ -266,10 +261,46 @@ void JobsList::addJob(const pid_t pid, std::string cmd_line, bool isStopped)
 
 void JobsList::printJobsList()
 {
+    this->killAllZombies();
     int count = 1;
     for (std::vector<JobEntry>::iterator it = jobs_vector.begin(); it != jobs_vector.end(); ++it){
-        std::cout << "[" << std::to_string(count) <<"]" << it->getCmdLine() << std::endl;
+        std::cout << "[" << std::to_string(count) <<"]" << it->m_cmd_line << ":" << std::to_string(it->m_pid)<< " ";
+        std::time_t time_now = std::time(nullptr);
+        int elapsed_seconds = std::difftime(time_now, it->m_init);
+        std::cout << std::to_string(elapsed_seconds) << std::endl;
         count++;
+    }
+}
+
+void JobsList::killAllZombies()
+{
+    for (std::vector<JobEntry>::iterator it = jobs_vector.begin(); it != jobs_vector.end();) {
+        int status;
+        pid_t pid = it->m_pid;
+
+        // If zombie then free
+        int res = waitpid(pid, &status, WNOHANG);
+        if (res == -1) {
+            // Error occurred
+            std::cerr << "waitpid() failed for PID " << pid << std::endl;
+            it++;
+        }
+        else if (res == 0) {
+            // Job is not a zombie
+            it++;
+        }
+        else if (WIFEXITED(status) || WIFSIGNALED(status)) {
+            // Child process has exited or was terminated by a signal
+            // Free its PID
+            std::cout << "killing zombie: " << it->m_cmd_line << std::endl;
+            int status;
+            waitpid(pid, &status, WUNTRACED);
+            it = jobs_vector.erase(it);
+        }
+        else {
+            std::cerr << "waitpid() got unknown status " << pid << std::endl;
+            it++;
+        }
     }
 }
 
@@ -296,7 +327,7 @@ void ExternalCommand::execute()
         perror("fork failed");
     }
 
-        // CHILD
+    // CHILD
     else if (pid == 0) {
         setpgrp();
         if (_isComplex(this->cmd_line)) {
@@ -307,7 +338,10 @@ void ExternalCommand::execute()
             // Is SIMPLE
             execvp(this->cmd_args_clean[0], this->cmd_args_clean);
         }
+        // INVALID COMMAND
         std::cerr << "Error executing command\n";
+        // If has &, it was added wrongfully to joblist, so need to remove TODO 
+        // (but also, maybe invalid commands isn't something we need to support)
         throw InvalidCommand();
     }
 

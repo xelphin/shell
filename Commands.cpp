@@ -282,7 +282,7 @@ void JobsList::killAllZombies()
         int res = waitpid(pid, &status, WNOHANG);
         if (res == -1) {
             // Error occurred
-            std::cerr << "waitpid() failed for PID " << pid << std::endl;
+            std::cerr << "waitpid() failed " << pid << std::endl;
             it++;
         }
         else if (res == 0) {
@@ -387,7 +387,14 @@ void ExternalCommand::execute()
 
 BuiltInCommand::BuiltInCommand(const char* cmd_line) : Command(cmd_line) {}
 
+// JOBS COMMAND
 
+JobsCommand::JobsCommand(const char* cmd_line, JobsList* jobs) : BuiltInCommand(cmd_line), p_jobList(jobs) {}
+
+void JobsCommand::execute()
+{
+    this->p_jobList->printJobsList();
+}
 
 // CHANGE_DIR COMMAND
 
@@ -544,7 +551,7 @@ void SmallShell::addJob(pid_t pid, const std::string cmd_line, bool isStopped)
         return;
     }
     jobList->addJob(pid, cmd_line, isStopped);
-    jobList->printJobsList(); // TODO: delete, just for debugging
+    // jobList->printJobsList(); // TODO: delete, just for debugging
 }
 
 
@@ -584,6 +591,9 @@ Command * SmallShell::CreateCommand(const char *cmd_line) {
     }
     else if (firstWord_clean == "cd") {
         return new ChangeDirCommand(cmd_s_clean.c_str(), this->getLastWorkingDirectoryPointer());
+    }
+    else if (firstWord_clean == "jobs") {
+        return new JobsCommand(cmd_s_clean.c_str(), this->jobList);
     }
         // TODO: Continue with more commands here
 

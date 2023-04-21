@@ -339,15 +339,14 @@ bool JobsList::jobExists(int jobId, std::string& job_cmd, pid_t& job_pid, bool r
         return false;
     }
     int vectorSize = ( this->jobs_vector).size();
-    if (indexJobId >= 0 && indexJobId < vectorSize) {
-        if (!removeLast) {
-            job_cmd = jobs_vector[indexJobId].m_cmd_line;
-            job_pid = jobs_vector[indexJobId].m_pid;
-        }
-        else {
-            job_cmd = jobs_vector[vectorSize-1].m_cmd_line;
-            job_pid = jobs_vector[vectorSize-1].m_pid;
-        }
+    if (indexJobId >= 0 && indexJobId < vectorSize && !removeLast) {
+        job_cmd = jobs_vector[indexJobId].m_cmd_line;
+        job_pid = jobs_vector[indexJobId].m_pid;
+        return true;
+    }
+    else if (removeLast) {
+        job_cmd = jobs_vector.back().m_cmd_line;
+        job_pid = jobs_vector.back().m_pid;
         return true;
     }
     if (indexJobId < 0 || indexJobId >= vectorSize) {
@@ -476,7 +475,7 @@ void ForegroundCommand::execute()
         exists = p_jobList->jobExists(std::stoi(cmd_args_clean[1]), job_cmd, job_pid, false);
     } else {
         // "fg"
-        // TODO: Implement with input just "fg"
+        exists = p_jobList->jobExists(-1, job_cmd, job_pid, true);
     }
     if (!exists) return;
 

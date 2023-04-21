@@ -205,6 +205,32 @@ void _updateCommandForExternalComplex(const char* cmd_line, char** cmd_args_exte
     }
 }
 
+bool _isValidFGInput( char* cmd_args_array[],  int args_count)
+{
+    if ( args_count< 1 || args_count> 2) {
+        std::cerr << "smash error: fg: invalid arguments\n";
+        return false;
+    }
+    bool isNegResolved = true;
+    if (args_count == 2) {
+        for (int i = 0; cmd_args_array[1][i] != '\0'; i++) {
+            if (i == 0 && cmd_args_array[1][i] == '-') {
+                isNegResolved = false;
+                continue;
+            }
+            if (!std::isdigit(cmd_args_array[1][i])) {
+                std::cerr << "smash error: fg: invalid arguments\n";
+                return false;
+            }
+            isNegResolved = true;
+        }
+    }
+    if (!isNegResolved) {
+        std::cerr << "smash error: fg: invalid arguments\n";
+        return false;
+    }
+    return true;
+}
 // -------------------------------
 // ------- COMMAND CLASSES -------
 // -------------------------------
@@ -304,6 +330,51 @@ void JobsList::killAllZombies()
     }
 }
 
+bool JobsList::jobExists(int jobId, std::string& job_cmd, pid_t& job_pid, bool removeLast)
+{
+    int indexJobId = jobId-1;
+    this->killAllZombies();
+    if (jobs_vector.empty() && removeLast) {
+        std::cerr << "smash error: fg: jobs list is empty\n";
+        return false;
+    }
+    int vectorSize = ( this->jobs_vector).size();
+    if (indexJobId >= 0 && indexJobId < vectorSize) {
+        job_cmd = jobs_vector[indexJobId].m_cmd_line;
+        job_pid = jobs_vector[indexJobId].m_pid;
+        // (this->jobs_vector).erase((this->jobs_vector).begin() + jobId); DON'T DO THIS HERE!
+        return true;
+    }
+    if (indexJobId < 0 || indexJobId >= vectorSize) {
+        std::cerr << "smash error: fg: job-id "<< std::to_string(jobId) <<" does not exist\n";
+
+    }
+    // TODO: Remove last job
+    return false;
+}
+
+bool JobsList::removeJobById(int jobId, std::string& job_cmd, pid_t& job_pid, bool removeLast)
+{
+    int indexJobId = jobId-1;
+    if (jobs_vector.empty() && removeLast) {
+        std::cerr << "smash error: fg: jobs list is empty\n";
+        return false;
+    }
+    int vectorSize = ( this->jobs_vector).size();
+    if (indexJobId >= 0 && indexJobId < vectorSize) {
+        job_cmd = jobs_vector[indexJobId].m_cmd_line;
+        job_pid = jobs_vector[indexJobId].m_pid;
+        (this->jobs_vector).erase((this->jobs_vector).begin() + jobId); 
+        return true;
+    }
+    if (indexJobId < 0 || indexJobId >= vectorSize) {
+        std::cerr << "smash error: fg: job-id "<< std::to_string(jobId) <<" does not exist\n";
+
+    }
+    // TODO: Remove last job
+    return false;
+}
+
 // --------------------------------
 // ------- EXTERNAL COMMAND -------
 // --------------------------------
@@ -387,12 +458,74 @@ void ExternalCommand::execute()
 
 BuiltInCommand::BuiltInCommand(const char* cmd_line) : Command(cmd_line) {}
 
+// FG COMMAND
+
+ForegroundCommand::ForegroundCommand(const char* cmd_line, JobsList* jobs) : BuiltInCommand(cmd_line), p_jobList(jobs) {}
+
+void ForegroundCommand::execute()
+{
+    // Checks valid format
+    if (p_jobList == nullptr) { // TODO: erase this, or make a throw
+        std::cout << "You accidentaly erased JobList!\n";
+        return;
+    }
+    if (!_isValidFGInput(cmd_args_clean, args_count_clean)) return;
+
+    // Check Job ID exists
+    std::string job_cmd;
+    pid_t job_pid;
+    bool exists = false;
+    if (args_count_clean != 1) {
+        // "fg <int>"
+        exists = p_jobList->jobExists(std::stoi(cmd_args_clean[1]), job_cmd, job_pid, false);
+    } else {
+        // "fg"
+        // TODO: Implement with input just "fg"
+    }
+    if (!exists) return;
+
+    // WAIT
+    std::cout << job_cmd << std::endl;
+    SmallShell& smash = SmallShell::getInstance();
+    int stat;
+    // Update Foreground PID to be that of Child
+    smash.updateFgPid(job_pid);
+    // Wait for child to finish/get signal
+    if (waitpid(job_pid, &stat, WUNTRACED | WCONTINUED) < 0) {
+        perror("wait failed");
+    } else {
+        std::cout << "Child: " << cmd_line_clean << ", finished\n"; // TODO: delete
+        _chkStatus(job_pid, stat);
+        std::cout << "my status: " << std::to_string(stat) << std::endl;
+        if (WEXITSTATUS(stat) == 127) {
+            // Valid Command
+            std::cout << "INVALID COMMAND\n"; // TODO: Edit this
+
+        }
+    }
+        
+    // Update Foreground PID of Smash
+    smash.updateFgPid(getpid()); // child is dead, so change back foreground to mean smash process again
+    // If in background, then don't wait!
+
+    // REMOVE
+    if (args_count_clean != 1) {
+        p_jobList->removeJobById(std::stoi(cmd_args_clean[1]), job_cmd, job_pid, false);
+    } else {
+        // TODO: Implement with input just "fg"
+    }
+}
+
 // JOBS COMMAND
 
 JobsCommand::JobsCommand(const char* cmd_line, JobsList* jobs) : BuiltInCommand(cmd_line), p_jobList(jobs) {}
 
 void JobsCommand::execute()
 {
+    if (p_jobList == nullptr) { // TODO: erase this, or make a throw
+        std::cout << "You accidentaly erased JobList!\n";
+        return;
+    }
     this->p_jobList->printJobsList();
 }
 
@@ -594,6 +727,9 @@ Command * SmallShell::CreateCommand(const char *cmd_line) {
     }
     else if (firstWord_clean == "jobs") {
         return new JobsCommand(cmd_s_clean.c_str(), this->jobList);
+    }
+    else if (firstWord_clean == "fg") {
+        return new ForegroundCommand(cmd_line, this->jobList);
     }
         // TODO: Continue with more commands here
 

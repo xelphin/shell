@@ -209,6 +209,7 @@ private:
     std::string smashPrompt;
     std::string lastWorkingDirectory;
     pid_t fg_pid = getpid();
+    std::string fg_cmd_line = "";
     Command* cmd = nullptr;
     JobsList* jobList;
 
@@ -237,7 +238,9 @@ public:
     // OUR METHODS
     std::string getSmashPrompt() const;
     pid_t returnFgPid() const; 
+    std::string returnFgCmdLine() const;
     void updateFgPid(const pid_t newFgPid);
+    void updateFgCmdLine(const char * newFgCmdLine);
     void addJob(pid_t pid, std::string cmd_line, bool isStopped);
 };
 

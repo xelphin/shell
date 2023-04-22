@@ -101,16 +101,19 @@ std::string _findXthWord(std::vector<std::string>& vector, int x)
 
 void _chkStatus(int pid, int stat)
 {
-if (WIFEXITED(stat)) {
-    int exit_status = WEXITSTATUS(stat);
-    if (exit_status == 127) {
-        // Child returned 127 (INVALID COMMAND)
-        std::cout << "Child returned 127\n";
-    } else {
-        // Child returned a non-127 status
-        std::cout << "Child returned " << exit_status << "\n";
-    }
-    } else if (WIFSIGNALED(stat)) {
+    if (WIFEXITED(stat)) {
+        int exit_status = WEXITSTATUS(stat);
+        if (exit_status == 127) {
+            // Child returned 127 (INVALID COMMAND)
+            std::cout << "Child returned 127\n";
+        } else {
+            // Child returned a non-127 status
+            std::cout << "Child returned " << exit_status << "\n";
+        }
+    }  else if (WIFSTOPPED(stat)) {
+        // Child process stopped by signal
+        std::cout << "Child process " << pid << " stopped by signal" << std::endl;
+    }  else if (WIFSIGNALED(stat)) {
         int signal_number = WTERMSIG(stat);
         if (signal_number == SIGINT) {
             std::cout << "Child was terminated by a SIGINT signal\n";
@@ -293,13 +296,19 @@ void JobsList::printJobsList()
         std::cout << "[" << std::to_string(count) <<"]" << it->m_cmd_line << ":" << std::to_string(it->m_pid)<< " ";
         std::time_t time_now = std::time(nullptr);
         int elapsed_seconds = std::difftime(time_now, it->m_init);
-        std::cout << std::to_string(elapsed_seconds) << std::endl;
+        std::cout << std::to_string(elapsed_seconds) << " secs";
+        if (it->m_isStopped) {
+            std::cout << " (stopped)\n";
+        } else {
+            std::cout << std::endl;
+        }
         count++;
     }
 }
 
 void JobsList::killAllZombies()
 {
+    std::cout << "Killing all zombies...\n";
     for (std::vector<JobEntry>::iterator it = jobs_vector.begin(); it != jobs_vector.end();) {
         int status;
         pid_t pid = it->m_pid;
@@ -314,6 +323,9 @@ void JobsList::killAllZombies()
         else if (res == 0) {
             // Job is not a zombie
             it++;
+        } else if (WIFSTOPPED(status)) {
+            // Child process stopped by signal
+            std::cout << "Child process " << res << " stopped by signal, not zombie" << std::endl;
         }
         else if (WIFEXITED(status) || WIFSIGNALED(status)) {
             // Child process has exited or was terminated by a signal
@@ -328,6 +340,7 @@ void JobsList::killAllZombies()
             it++;
         }
     }
+    std::cout << "Finished Killing Zombies.\n";
 }
 
 bool JobsList::jobExists(int jobId, std::string& job_cmd, pid_t& job_pid, bool removeLast)
@@ -426,11 +439,12 @@ void ExternalCommand::execute()
         else {
             // Update Foreground PID to be that of Child
             smash.updateFgPid(pid);
+            smash.updateFgCmdLine(this->cmd_line);
             // Wait for child to finish/get signal
-            if (waitpid(pid, &stat, WUNTRACED | WCONTINUED) < 0) {
+            if (waitpid(pid, &stat, WUNTRACED ) < 0) {
                 perror("wait failed");
             } else {
-                std::cout << "Child: " << cmd_line_clean << ", finished\n"; // TODO: delete
+                std::cout << "Child: " << cmd_line_clean << ", finished (external)\n"; // TODO: delete
                 _chkStatus(pid, stat);
                 std::cout << "my status: " << std::to_string(stat) << std::endl;
                 if (WEXITSTATUS(stat) == 127) {
@@ -485,17 +499,21 @@ void ForegroundCommand::execute()
     int stat;
     // Update Foreground PID to be that of Child
     smash.updateFgPid(job_pid);
+    smash.updateFgCmdLine(job_cmd.c_str());
+    // send SIGCONT
+    kill(job_pid, SIGCONT);
     // Wait for child to finish/get signal
-    if (waitpid(job_pid, &stat, WUNTRACED | WCONTINUED) < 0) {
+    std::cout << "moved "<< job_pid  << " to fg and now waiting for signal to stop me\n";
+    if (waitpid(job_pid, &stat, WUNTRACED ) < 0) {
         perror("wait failed");
     } else {
-        std::cout << "Child: " << cmd_line_clean << ", finished\n"; // TODO: delete
+        // WAIT FINISHED
+        std::cout << "Child: " << job_cmd << ", finished (fg)\n"; // TODO: delete
         _chkStatus(job_pid, stat);
         std::cout << "my status: " << std::to_string(stat) << std::endl;
         if (WEXITSTATUS(stat) == 127) {
-            // Valid Command
+            // Invalid Command
             std::cout << "INVALID COMMAND\n"; // TODO: Edit this
-
         }
     }
         
@@ -632,11 +650,20 @@ pid_t SmallShell::returnFgPid() const
     return fg_pid;
 }
 
+std::string SmallShell::returnFgCmdLine() const
+{
+    return fg_cmd_line;
+}
+
 void SmallShell::updateFgPid(const pid_t newFgPid) 
 {
     this->fg_pid = newFgPid;
 }
 
+void SmallShell::updateFgCmdLine(const char * newFgCmdLine)
+{
+    this->fg_cmd_line = newFgCmdLine;
+}
 
 
 void SmallShell::setPrompt(const std::string cmd_line)

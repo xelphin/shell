@@ -102,7 +102,7 @@ public:
 
 class JobsList;
 class QuitCommand : public BuiltInCommand {
-// TODO: Add your data members
+    JobsList* p_jobList;
 public:
     QuitCommand(const char* cmd_line, JobsList* jobs);
     virtual ~QuitCommand() {}
@@ -196,13 +196,13 @@ public:
     void execute() override;
 };
 
-class KillCommand : public BuiltInCommand {
-    // TODO: Add your data members
-public:
-    KillCommand(const char* cmd_line, JobsList* jobs);
-    virtual ~KillCommand() {}
-    void execute() override;
-};
+// class KillCommand : public BuiltInCommand {
+//     JobsList* p_jobList;
+// public:
+//     KillCommand(const char* cmd_line, JobsList* jobs);
+//     virtual ~KillCommand() {}
+//     void execute() override;
+// };
 
 class SmallShell {
 private:
@@ -213,6 +213,7 @@ private:
     std::string fg_cmd_line = "";
     Command* cmd = nullptr;
     JobsList* jobList;
+    bool killSmash = false;
 
     // Private functions
     void setPrompt(const std::string cmd_line);
@@ -243,6 +244,8 @@ public:
     void updateFgPid(const pid_t newFgPid);
     void updateFgCmdLine(const char * newFgCmdLine);
     void addJob(pid_t pid, std::string cmd_line, bool isStopped);
+    bool getKillSmash();
+    void setKillSmash();
 };
 
 #endif //SMASH_COMMAND_H_

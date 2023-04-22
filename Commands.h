@@ -132,6 +132,7 @@ public:
     void killAllJobs();
     JobEntry * getJobById(int jobId);
     bool jobExists(int jobId, std::string& job_cmd, pid_t& job_pid, bool removeLast);
+    bool stoppedJobExists(int jobId, std::string& job_cmd, pid_t& job_pid, bool removeLast);
     bool removeJobByPID(pid_t job_pid);
     JobEntry * getLastJob(int* lastJobId);
     JobEntry *getLastStoppedJob(int *jobId);
@@ -155,7 +156,7 @@ public:
 };
 
 class BackgroundCommand : public BuiltInCommand {
-    // TODO: Add your data members
+    JobsList* p_jobList;
 public:
     BackgroundCommand(const char* cmd_line, JobsList* jobs);
     virtual ~BackgroundCommand() {}

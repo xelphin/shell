@@ -105,23 +105,23 @@ void _chkStatus(int pid, int stat)
         int exit_status = WEXITSTATUS(stat);
         if (exit_status == 127) {
             // Child returned 127 (INVALID COMMAND)
-            std::cout << "Child returned 127\n";
+            //std::cout << "Child returned 127\n";
         } else {
             // Child returned a non-127 status
-            std::cout << "Child returned " << exit_status << "\n";
+            //std::cout << "Child returned " << exit_status << "\n";
         }
     }  else if (WIFSTOPPED(stat)) {
         // Child process stopped by signal
-        std::cout << "Child process " << pid << " stopped by signal" << std::endl;
+        //std::cout << "Child process " << pid << " stopped by signal" << std::endl;
     }  else if (WIFSIGNALED(stat)) {
         int signal_number = WTERMSIG(stat);
         if (signal_number == SIGINT) {
-            std::cout << "Child was terminated by a SIGINT signal\n";
+            //std::cout << "Child was terminated by a SIGINT signal\n";
         } else {
-            std::cout << "Child was terminated by signal " << signal_number << "\n";
+            //std::cout << "Child was terminated by signal " << signal_number << "\n";
         }
     } else {
-        std::cerr << "Child terminated abnormally\n";
+        //std::cerr << "Child terminated abnormally\n";
     }
 }
 
@@ -208,10 +208,10 @@ void _updateCommandForExternalComplex(const char* cmd_line, char** cmd_args_exte
     }
 }
 
-bool _isValidFgBgInput( char* cmd_args_array[],  int args_count)
+bool _isValidFgBgInput( char* cmd_args_array[],  int args_count, std::string type)
 {
     if ( args_count< 1 || args_count> 2) {
-        std::cerr << "smash error: bg: invalid arguments\n";
+        std::cerr << "smash error: "<< type <<": invalid arguments\n";
         return false;
     }
     bool isNegResolved = true;
@@ -222,14 +222,14 @@ bool _isValidFgBgInput( char* cmd_args_array[],  int args_count)
                 continue;
             }
             if (!std::isdigit(cmd_args_array[1][i])) {
-                std::cerr << "smash error: bg: invalid arguments\n";
+                std::cerr << "smash error: "<< type <<": invalid arguments\n";
                 return false;
             }
             isNegResolved = true;
         }
     }
     if (!isNegResolved) {
-        std::cerr << "smash error: bg: invalid arguments\n";
+        std::cerr << "smash error: "<< type <<": invalid arguments\n";
         return false;
     }
     return true;
@@ -347,7 +347,7 @@ void JobsList::killAllZombies()
         int res = waitpid(pid, &status, WNOHANG);
         if (res == -1) {
             // Error occurred
-            std::cerr << "waitpid() failed " << pid << std::endl;
+            perror("smash error: waitpid failed");
             it++;
         }
         else if (res == 0) {
@@ -355,18 +355,18 @@ void JobsList::killAllZombies()
             it++;
         } else if (WIFSTOPPED(status)) {
             // Child process stopped by signal
-            std::cout << "Child process " << res << " stopped by signal, not zombie" << std::endl;
+            // std::cout << "Child process " << res << " stopped by signal, not zombie" << std::endl;
         }
         else if (WIFEXITED(status) || WIFSIGNALED(status)) {
             // Child process has exited or was terminated by a signal
             // Free its PID
-            std::cout << "killing zombie: " << it->m_cmd_line << std::endl;
+            // std::cout << "killing zombie: " << it->m_cmd_line << std::endl;
             int status;
-            waitpid(pid, &status, WUNTRACED);
+            if (waitpid(pid, &status, WUNTRACED) == -1) perror("smash error: waitpid failed");
             it = jobs_vector.erase(it);
         }
         else {
-            std::cerr << "waitpid() got unknown status " << pid << std::endl;
+            // unknown
             it++;
         }
     }
@@ -386,7 +386,7 @@ void JobsList::killAllJobs()
 
     // KILL ALL JOBS
     for (std::vector<JobEntry>::iterator it = jobs_vector.begin(); it != jobs_vector.end(); ++it){
-        kill(it->m_pid, SIGKILL);
+        if (kill(it->m_pid, SIGKILL) == -1) perror("smash error: kill failed");
     }
 }
 
@@ -496,14 +496,14 @@ void ExternalCommand::execute()
     int stat;
     // TODO: The following is a basic implementation for commands like "date", "ls", "ls -a" that run in foreground, do the rest
     if (this->args_count < 1) {
-        std::cout << " Too few words\n"; // TODO: Erase, figure out what should actually be printed (although should never get here)
+        // std::cout << " Too few words\n"; // TODO: Erase, figure out what should actually be printed (although should never get here)
         return;
     }
 
     // FORK
     pid_t pid = fork();
     if (pid < 0) {
-        perror("fork failed");
+        perror("smash error: fork failed");
     }
 
     // CHILD
@@ -511,14 +511,13 @@ void ExternalCommand::execute()
         setpgrp();
         if (_isComplex(this->cmd_line)) {
             // Is COMPLEX
-            std::cout << "Is Complex\n";
-            execv(cmd_args_clean_external[0], cmd_args_clean_external);
+            if (execv(cmd_args_clean_external[0], cmd_args_clean_external) == -1) perror("smash error: execv failed");
         } else {
             // Is SIMPLE
-            execvp(this->cmd_args_clean[0], this->cmd_args_clean);
+            if (execvp(this->cmd_args_clean[0], this->cmd_args_clean) == -1) perror("smash error: execvp failed");
         }
         // INVALID COMMAND
-        std::cerr << "Error executing command\n";
+        // std::cerr << "Error executing command\n";
         // If has &, it was added wrongfully to joblist, so need to remove TODO 
         // (but also, maybe invalid commands isn't something we need to support)
         throw InvalidCommand();
@@ -530,7 +529,6 @@ void ExternalCommand::execute()
 
         // BACKGROUND
         if (this->isBackground) {
-            std::cout << "Background Command, adding to JobList\n";
             // Notice: If invalid background command, then instantly waitpid() finishes and removes it TODO
             smash.addJob(pid, cmd_line, false); 
         } 
@@ -542,14 +540,14 @@ void ExternalCommand::execute()
             smash.updateFgCmdLine(this->cmd_line);
             // Wait for child to finish/get signal
             if (waitpid(pid, &stat, WUNTRACED ) < 0) {
-                perror("wait failed");
+                perror("smash error: wait failed");
             } else {
-                std::cout << "Child: " << cmd_line_clean << ", finished (external)\n"; // TODO: delete
+                //std::cout << "Child: " << cmd_line_clean << ", finished (external)\n"; // TODO: delete
                 _chkStatus(pid, stat);
-                std::cout << "my status: " << std::to_string(stat) << std::endl;
+                //std::cout << "my status: " << std::to_string(stat) << std::endl;
                 if (WEXITSTATUS(stat) == 127) {
                     // Valid Command
-                    std::cout << "INVALID COMMAND\n"; // TODO: Edit this
+                    // std::cout << "INVALID COMMAND\n"; // TODO: Edit this
 
                 }
             }
@@ -574,7 +572,7 @@ KillCommand::KillCommand(const char* cmd_line, JobsList* jobs) : BuiltInCommand(
 void KillCommand::KillCommand::execute()
 {
     if (p_jobList == nullptr) { // TODO: erase this, or make a throw
-        std::cout << "You accidentaly erased JobList!\n";
+        //std::cout << "You accidentaly erased JobList!\n";
         return;
     }
     int signal, jobId;
@@ -611,7 +609,7 @@ void QuitCommand::QuitCommand::execute()
 {
     // Checks valid format
     if (p_jobList == nullptr) { // TODO: erase this, or make a throw
-        std::cout << "You accidentaly erased JobList!\n";
+        // std::cout << "You accidentaly erased JobList!\n";
         return;
     }
     if (this->args_count_clean < 1 ) return;
@@ -636,10 +634,10 @@ void ForegroundCommand::execute()
 {
     // Checks valid format
     if (p_jobList == nullptr) { // TODO: erase this, or make a throw
-        std::cout << "You accidentaly erased JobList!\n";
+        // std::cout << "You accidentaly erased JobList!\n";
         return;
     }
-    if (!_isValidFgBgInput(cmd_args_clean, args_count_clean)) return;
+    if (!_isValidFgBgInput(cmd_args_clean, args_count_clean, "fg")) return;
 
     // Check Job ID exists
     std::string job_cmd;
@@ -655,26 +653,24 @@ void ForegroundCommand::execute()
     if (!exists) return;
 
     // WAIT
-    std::cout << job_cmd << std::endl;
+    std::cout << job_cmd << ":" << std::to_string(job_pid) << std::endl;
     SmallShell& smash = SmallShell::getInstance();
     int stat;
     // Update Foreground PID to be that of Child
     smash.updateFgPid(job_pid);
     smash.updateFgCmdLine(job_cmd.c_str());
     // send SIGCONT
-    kill(job_pid, SIGCONT);
+    if (kill(job_pid, SIGCONT) == -1) perror("smash error: kill failed");
     // Wait for child to finish/get signal
-    std::cout << "moved "<< job_pid  << " to fg and now waiting for signal to stop me\n";
     if (waitpid(job_pid, &stat, WUNTRACED ) < 0) {
-        perror("wait failed");
+        perror("smash error: wait failed");
     } else {
         // WAIT FINISHED
-        std::cout << "Child: " << job_cmd << ", finished (fg)\n"; // TODO: delete
         _chkStatus(job_pid, stat);
-        std::cout << "my status: " << std::to_string(stat) << std::endl;
+        // std::cout << "my status: " << std::to_string(stat) << std::endl;
         if (WEXITSTATUS(stat) == 127) {
             // Invalid Command
-            std::cout << "INVALID COMMAND\n"; // TODO: Edit this
+            // std::cout << "INVALID COMMAND\n"; // TODO: Edit this
         }
     }
         
@@ -694,10 +690,10 @@ void BackgroundCommand::execute()
 {
     // Checks valid format
     if (p_jobList == nullptr) { // TODO: erase this, or make a throw
-        std::cout << "You accidentaly erased JobList!\n";
+        // std::cout << "You accidentaly erased JobList!\n";
         return;
     }
-    if (!_isValidFgBgInput(cmd_args_clean, args_count_clean)) return;
+    if (!_isValidFgBgInput(cmd_args_clean, args_count_clean, "bg")) return;
 
     // Check Job ID exists and is stopped
     std::string job_cmd;
@@ -713,10 +709,10 @@ void BackgroundCommand::execute()
     if (!exists) return;
 
     // PRINT command
-    std::cout << job_cmd << std::endl;
+    std::cout << job_cmd << ":" << std::to_string(job_pid) << std::endl;
 
     // CONTINUE stopped process
-    kill(job_pid, SIGCONT);
+    if (kill(job_pid, SIGCONT) == -1) perror("smash error: kill failed");
 }
 
 // JOBS COMMAND
@@ -726,7 +722,7 @@ JobsCommand::JobsCommand(const char* cmd_line, JobsList* jobs) : BuiltInCommand(
 void JobsCommand::execute()
 {
     if (p_jobList == nullptr) { // TODO: erase this, or make a throw
-        std::cout << "You accidentaly erased JobList!\n";
+        // std::cout << "You accidentaly erased JobList!\n";
         return;
     }
     this->p_jobList->printJobsList();
@@ -743,6 +739,8 @@ void ChangeDirCommand::execute()
     char cwd[OUTPUT_MAX_OUT];
     if (getcwd(cwd, sizeof(cwd)) != NULL) {
         currDir = cwd;
+    } else {
+        perror("smash error: getcwd failed");
     }
 
     // See if there's a third word (illegal)
@@ -765,14 +763,14 @@ void ChangeDirCommand::execute()
         }
         if (chdir((*lastPwd).c_str()) != 0) {
             // Not successful
-            std::perror("smash error: cd failed"); // TODO: is this how they want it?
+            std::perror("smash error: cd failed"); 
             return;
         }
     } else {
         // Normal: cd <path>
         if (chdir(secondWord.c_str()) != 0) {
             // Not successful
-            std::perror("smash error: cd failed"); // TODO: is this how they want it?
+            std::perror("smash error: cd failed"); 
             return;
         }
     }
@@ -795,6 +793,8 @@ void GetCurrDirCommand::execute()
     char cwd[OUTPUT_MAX_OUT]; // TODO: check that the pwd can't in fact exceed 80 characters (asked in Piazza)
     if (getcwd(cwd, sizeof(cwd)) != NULL) {
         text += cwd;
+    } else {
+        perror("smash error: getcwd failed");
     }
     text += "\n";
 
@@ -811,6 +811,7 @@ void ShowPidCommand::execute()
     std::string text = "smash pid is ";
     // Get pid : TODO: Check that this is actually the pid() that they want
     pid_t pid = getpid();
+    if (pid == -1) perror("smash error: getpid failed");
     std::string pidStr = std::to_string(pid);
     text += pidStr;
     text += "\n";
@@ -892,11 +893,10 @@ std::string SmallShell::getLastWorkingDirectory() const
 void SmallShell::addJob(pid_t pid, const std::string cmd_line, bool isStopped)
 {
     if (jobList == nullptr) { // TODO: erase this, or make a throw
-        std::cout << "You accidentaly erased JobList!\n";
+        // std::cout << "You accidentaly erased JobList!\n";
         return;
     }
     jobList->addJob(pid, cmd_line, isStopped);
-    // jobList->printJobsList(); // TODO: delete, just for debugging
 }
 
 bool SmallShell::getKillSmash()

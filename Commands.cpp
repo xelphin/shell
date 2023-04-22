@@ -341,6 +341,24 @@ void JobsList::killAllZombies()
     }
 }
 
+void JobsList::killAllJobs()
+{
+    // kill all zombies before we start
+    this->killAllZombies();
+
+    // PRINT JOBS
+    int vectorSize = ( this->jobs_vector).size();
+    std::cout << "smash: sending SIGKILL signal to "<< std::to_string(vectorSize) <<" jobs:\n";
+    for (std::vector<JobEntry>::iterator it = jobs_vector.begin(); it != jobs_vector.end(); ++it){
+        std::cout <<  std::to_string(it->m_pid)<< ":" << it->m_cmd_line << std::endl;
+    }
+
+    // KILL ALL JOBS
+    for (std::vector<JobEntry>::iterator it = jobs_vector.begin(); it != jobs_vector.end(); ++it){
+        kill(it->m_pid, SIGKILL);
+    }
+}
+
 bool JobsList::jobExists(int jobId, std::string& job_cmd, pid_t& job_pid, bool removeLast)
 {
     int indexJobId = jobId-1;
@@ -505,6 +523,31 @@ void ExternalCommand::execute()
 // -----------------------------------
 
 BuiltInCommand::BuiltInCommand(const char* cmd_line) : Command(cmd_line) {}
+
+// QUIT COMMAND
+
+QuitCommand::QuitCommand(const char* cmd_line, JobsList* jobs) : BuiltInCommand(cmd_line), p_jobList(jobs) {}
+
+void QuitCommand::QuitCommand::execute()
+{
+    // Checks valid format
+    if (p_jobList == nullptr) { // TODO: erase this, or make a throw
+        std::cout << "You accidentaly erased JobList!\n";
+        return;
+    }
+    if (this->args_count_clean < 1 ) return;
+    if (strcmp(this->cmd_args_clean[0], "quit") != 0) return;
+    if (this->args_count_clean > 1 && strcmp(this->cmd_args_clean[1], "kill") != 0) return;
+    SmallShell& smash = SmallShell::getInstance();
+    // QUIT
+    if (this->args_count_clean == 1) {
+        smash.setKillSmash();
+        return;
+    }
+    // QUIT KILL
+    p_jobList->killAllJobs();
+    smash.setKillSmash();
+}
 
 // FG COMMAND
 
@@ -777,7 +820,15 @@ void SmallShell::addJob(pid_t pid, const std::string cmd_line, bool isStopped)
     // jobList->printJobsList(); // TODO: delete, just for debugging
 }
 
+bool SmallShell::getKillSmash()
+{
+    return this->killSmash;
+}
 
+void SmallShell::setKillSmash()
+{
+    this->killSmash = true;
+}
 /**
 * Creates and returns a pointer to Command class which matches the given command line (cmd_line)
 */
@@ -823,6 +874,9 @@ Command * SmallShell::CreateCommand(const char *cmd_line) {
     }
     else if (firstWord_clean == "bg") {
         return new BackgroundCommand(cmd_line, this->jobList);
+    }
+    else if (firstWord_clean == "quit") {
+        return new QuitCommand(cmd_line, this->jobList);
     }
         // TODO: Continue with more commands here
 

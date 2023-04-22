@@ -22,7 +22,7 @@ int main(int argc, char* argv[]) {
 
     SmallShell& smash = SmallShell::getInstance();
     int count = 0; // TODO: DELETE, this was made so that the while will stop
-    while(true && count < 10) { // TODO: DELETE count < 10
+    while(true && count < 10 && !smash.getKillSmash()) { // TODO: DELETE count < 10
         count++;
         std::cout << smash.getSmashPrompt();
         std::string cmd_line;

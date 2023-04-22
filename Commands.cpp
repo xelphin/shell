@@ -308,7 +308,6 @@ void JobsList::printJobsList()
 
 void JobsList::killAllZombies()
 {
-    std::cout << "Killing all zombies...\n";
     for (std::vector<JobEntry>::iterator it = jobs_vector.begin(); it != jobs_vector.end();) {
         int status;
         pid_t pid = it->m_pid;
@@ -340,7 +339,6 @@ void JobsList::killAllZombies()
             it++;
         }
     }
-    std::cout << "Finished Killing Zombies.\n";
 }
 
 bool JobsList::jobExists(int jobId, std::string& job_cmd, pid_t& job_pid, bool removeLast)

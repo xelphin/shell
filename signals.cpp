@@ -3,6 +3,7 @@
 #include "signals.h"
 #include "Commands.h"
 
+
 using namespace std;
 
 void ctrlZHandler(int sig_num) {
@@ -18,12 +19,7 @@ void ctrlZHandler(int sig_num) {
     // IF there is a child (in foreground) then stop fg_pid (child)
     kill(fg_pid, SIGSTOP);
     std::cout << "smash: process " << std::to_string(fg_pid) <<" was stopped\n";
-
-  } else {
-    // TODO: Check how the "smash>" should be printed, maybe I should throw; and catch; in main instead of continuing on std::getline()
-  }
-  
-
+  } 
 }
 
 void ctrlCHandler(int sig_num) {

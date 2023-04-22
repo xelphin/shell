@@ -208,10 +208,10 @@ void _updateCommandForExternalComplex(const char* cmd_line, char** cmd_args_exte
     }
 }
 
-bool _isValidFGInput( char* cmd_args_array[],  int args_count)
+bool _isValidFgBgInput( char* cmd_args_array[],  int args_count)
 {
     if ( args_count< 1 || args_count> 2) {
-        std::cerr << "smash error: fg: invalid arguments\n";
+        std::cerr << "smash error: bg: invalid arguments\n";
         return false;
     }
     bool isNegResolved = true;
@@ -222,14 +222,14 @@ bool _isValidFGInput( char* cmd_args_array[],  int args_count)
                 continue;
             }
             if (!std::isdigit(cmd_args_array[1][i])) {
-                std::cerr << "smash error: fg: invalid arguments\n";
+                std::cerr << "smash error: bg: invalid arguments\n";
                 return false;
             }
             isNegResolved = true;
         }
     }
     if (!isNegResolved) {
-        std::cerr << "smash error: fg: invalid arguments\n";
+        std::cerr << "smash error: bg: invalid arguments\n";
         return false;
     }
     return true;
@@ -368,6 +368,47 @@ bool JobsList::jobExists(int jobId, std::string& job_cmd, pid_t& job_pid, bool r
     return false;
 }
 
+bool JobsList::stoppedJobExists(int jobId, std::string& job_cmd, pid_t& job_pid, bool removeLast)
+{
+    int indexJobId = jobId-1;
+    this->killAllZombies();
+    if (jobs_vector.empty() && removeLast) {
+        std::cerr << "smash error: bg: there is no stopped jobs to resume\n";
+        return false;
+    }
+    int vectorSize = ( this->jobs_vector).size();
+    // REMOVE LAST
+    if (removeLast) {
+        for (std::vector<JobEntry>::reverse_iterator it = jobs_vector.rbegin(); it != jobs_vector.rend(); ++it){
+            if (it->m_isStopped) {
+                it->m_isStopped = false;
+                job_cmd = it->m_cmd_line;
+                job_pid = it->m_pid;
+                return true;
+            }
+        }
+        std::cerr << "smash error: bg: there is no stopped jobs to resume\n";
+        return false;
+    }
+    // REMOVE AT JOB_ID
+    if (indexJobId >= 0 && indexJobId < vectorSize) {
+        // Job exists
+        if (jobs_vector[indexJobId].m_isStopped != true) {
+            // Job is running
+            std::cerr << "smash error: bg: job-id "<< std::to_string(jobId) <<" is already running in the background\n";
+            return false;
+        }
+        // Job is stopped
+        jobs_vector[indexJobId].m_isStopped = false;
+        job_cmd = jobs_vector[indexJobId].m_cmd_line;
+        job_pid = jobs_vector[indexJobId].m_pid;
+        return true;
+    }
+    // Job doesn't exist
+    std::cerr << "smash error: bg: job-id "<< std::to_string(jobId) <<" does not exist\n";
+    return false;
+}
+
 bool JobsList::removeJobByPID(pid_t job_pid)
 {
     for (std::vector<JobEntry>::iterator it = jobs_vector.begin(); it != jobs_vector.end();){
@@ -476,7 +517,7 @@ void ForegroundCommand::execute()
         std::cout << "You accidentaly erased JobList!\n";
         return;
     }
-    if (!_isValidFGInput(cmd_args_clean, args_count_clean)) return;
+    if (!_isValidFgBgInput(cmd_args_clean, args_count_clean)) return;
 
     // Check Job ID exists
     std::string job_cmd;
@@ -521,6 +562,39 @@ void ForegroundCommand::execute()
 
     // REMOVE
     p_jobList->removeJobByPID(job_pid);
+}
+
+// BACKGROUND COMMAND
+
+BackgroundCommand::BackgroundCommand(const char* cmd_line, JobsList* jobs) : BuiltInCommand(cmd_line), p_jobList(jobs) {}
+
+void BackgroundCommand::execute()
+{
+    // Checks valid format
+    if (p_jobList == nullptr) { // TODO: erase this, or make a throw
+        std::cout << "You accidentaly erased JobList!\n";
+        return;
+    }
+    if (!_isValidFgBgInput(cmd_args_clean, args_count_clean)) return;
+
+    // Check Job ID exists and is stopped
+    std::string job_cmd;
+    pid_t job_pid;
+    bool exists = false;
+    if (args_count_clean != 1) {
+        // "bg <int>"
+        exists = p_jobList->stoppedJobExists(std::stoi(cmd_args_clean[1]), job_cmd, job_pid, false);
+    } else {
+        // "bg"
+        exists = p_jobList->stoppedJobExists(-1, job_cmd, job_pid, true);
+    }
+    if (!exists) return;
+
+    // PRINT command
+    std::cout << job_cmd << std::endl;
+
+    // CONTINUE stopped process
+    kill(job_pid, SIGCONT);
 }
 
 // JOBS COMMAND
@@ -746,6 +820,9 @@ Command * SmallShell::CreateCommand(const char *cmd_line) {
     }
     else if (firstWord_clean == "fg") {
         return new ForegroundCommand(cmd_line, this->jobList);
+    }
+    else if (firstWord_clean == "bg") {
+        return new BackgroundCommand(cmd_line, this->jobList);
     }
         // TODO: Continue with more commands here
 

@@ -234,6 +234,37 @@ bool _isValidFgBgInput( char* cmd_args_array[],  int args_count)
     }
     return true;
 }
+
+bool _isValidKillSyntax(char* cmd_args_array[],  int args_count, int& signal, int& jobId)
+{
+    if (args_count < 3 || args_count > 3) return false;
+    if (strcmp(cmd_args_array[0], "kill") != 0) return false;
+
+    // CHECK valid signal syntax
+    int count = 0;
+    for(; cmd_args_array[1][count] != '\0'; count++) {
+        char chr = cmd_args_array[1][count];
+        if (count == 0 && cmd_args_array[1][0] != '-') return false;
+        if(count != 0 && !isdigit(chr)) return false;
+    }
+    if (count < 2) return false;
+    signal = atoi(cmd_args_array[1] + 1);
+
+    // CHECK valid id syntax
+    count = 0;
+    for(; cmd_args_array[2][count] != '\0'; count++) {
+        char chr = cmd_args_array[2][count];
+        if(!isdigit(chr)) return false;
+    }
+    if (count <1) return false;
+    jobId = atoi(cmd_args_array[2]);
+
+    // okay
+
+    return true;
+}
+
+
 // -------------------------------
 // ------- COMMAND CLASSES -------
 // -------------------------------
@@ -359,12 +390,12 @@ void JobsList::killAllJobs()
     }
 }
 
-bool JobsList::jobExists(int jobId, std::string& job_cmd, pid_t& job_pid, bool removeLast)
+bool JobsList::jobExists(int jobId, std::string& job_cmd, pid_t& job_pid, bool removeLast, bool isFgCommand)
 {
     int indexJobId = jobId-1;
     this->killAllZombies();
     if (jobs_vector.empty() && removeLast) {
-        std::cerr << "smash error: fg: jobs list is empty\n";
+        if (isFgCommand) std::cerr << "smash error: fg: jobs list is empty\n";
         return false;
     }
     int vectorSize = ( this->jobs_vector).size();
@@ -379,10 +410,9 @@ bool JobsList::jobExists(int jobId, std::string& job_cmd, pid_t& job_pid, bool r
         return true;
     }
     if (indexJobId < 0 || indexJobId >= vectorSize) {
-        std::cerr << "smash error: fg: job-id "<< std::to_string(jobId) <<" does not exist\n";
+        if (isFgCommand) std::cerr << "smash error: fg: job-id "<< std::to_string(jobId) <<" does not exist\n";
 
     }
-    // TODO: Remove last job
     return false;
 }
 
@@ -440,6 +470,19 @@ bool JobsList::removeJobByPID(pid_t job_pid)
     return false;
 }
 
+void JobsList::setJobPidStopState(pid_t pid, int signal)
+{
+    for (std::vector<JobEntry>::iterator it = jobs_vector.begin(); it != jobs_vector.end(); ++it){
+        if (it->m_pid == pid) {
+            if (signal == 18) { // SIGCONT
+                it->m_isStopped = false;
+            } else if (signal == 19) { // SIGSTOP
+                it->m_isStopped = true;
+            }
+            // Zombies are killed in above functions
+        }
+    }
+}
 // --------------------------------
 // ------- EXTERNAL COMMAND -------
 // --------------------------------
@@ -524,6 +567,42 @@ void ExternalCommand::execute()
 
 BuiltInCommand::BuiltInCommand(const char* cmd_line) : Command(cmd_line) {}
 
+// KILL COMMAND
+
+KillCommand::KillCommand(const char* cmd_line, JobsList* jobs) : BuiltInCommand(cmd_line), p_jobList(jobs) {}
+
+void KillCommand::KillCommand::execute()
+{
+    if (p_jobList == nullptr) { // TODO: erase this, or make a throw
+        std::cout << "You accidentaly erased JobList!\n";
+        return;
+    }
+    int signal, jobId;
+    if (!_isValidKillSyntax(this->cmd_args_clean, this->args_count_clean, signal, jobId )) {
+        std::cerr << "smash error: kill: invalid arguments\n";
+        return;
+    }
+    // Check Job ID exists
+    std::string job_cmd;
+    pid_t job_pid;
+    bool exists = false;
+    exists = p_jobList->jobExists(jobId, job_cmd, job_pid, false, false);
+    if (!exists) {
+        std::cerr << "smash error: kill: job-id "<< std::to_string(jobId) <<" does not exist\n";
+        return;
+    }
+    // std::cout << "My arguments: signal: "<< std::to_string(signal) << " , jobId: " << std::to_string(jobId) << std::endl;
+    // Send signal to Job
+    std::cout << "signal number "<< std::to_string(signal) << " was sent to pid "<< std::to_string(job_pid) <<"\n";
+    int result = kill(job_pid, signal);
+    if(result == -1) {
+        perror("smash error: kill failed");
+    } else {
+        // UPDATE JOB LIST (SIGSTOP/SIGCONT)
+        p_jobList->setJobPidStopState(job_pid, signal);
+    }
+}
+
 // QUIT COMMAND
 
 QuitCommand::QuitCommand(const char* cmd_line, JobsList* jobs) : BuiltInCommand(cmd_line), p_jobList(jobs) {}
@@ -568,10 +647,10 @@ void ForegroundCommand::execute()
     bool exists = false;
     if (args_count_clean != 1) {
         // "fg <int>"
-        exists = p_jobList->jobExists(std::stoi(cmd_args_clean[1]), job_cmd, job_pid, false);
+        exists = p_jobList->jobExists(std::stoi(cmd_args_clean[1]), job_cmd, job_pid, false, true);
     } else {
         // "fg"
-        exists = p_jobList->jobExists(-1, job_cmd, job_pid, true);
+        exists = p_jobList->jobExists(-1, job_cmd, job_pid, true, true);
     }
     if (!exists) return;
 
@@ -877,6 +956,9 @@ Command * SmallShell::CreateCommand(const char *cmd_line) {
     }
     else if (firstWord_clean == "quit") {
         return new QuitCommand(cmd_line, this->jobList);
+    }
+    else if (firstWord_clean == "kill") {
+        return new KillCommand(cmd_line, this->jobList);
     }
         // TODO: Continue with more commands here
 

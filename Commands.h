@@ -131,12 +131,12 @@ public:
     void killAllZombies();
     void killAllJobs();
     JobEntry * getJobById(int jobId);
-    bool jobExists(int jobId, std::string& job_cmd, pid_t& job_pid, bool removeLast);
+    bool jobExists(int jobId, std::string& job_cmd, pid_t& job_pid, bool removeLast, bool isFgCommand);
     bool stoppedJobExists(int jobId, std::string& job_cmd, pid_t& job_pid, bool removeLast);
     bool removeJobByPID(pid_t job_pid);
     JobEntry * getLastJob(int* lastJobId);
     JobEntry *getLastStoppedJob(int *jobId);
-    // TODO: Add extra methods or modify exisitng ones as needed
+    void setJobPidStopState(pid_t pid, int signal);
 };
 
 class JobsCommand : public BuiltInCommand {
@@ -196,13 +196,13 @@ public:
     void execute() override;
 };
 
-// class KillCommand : public BuiltInCommand {
-//     JobsList* p_jobList;
-// public:
-//     KillCommand(const char* cmd_line, JobsList* jobs);
-//     virtual ~KillCommand() {}
-//     void execute() override;
-// };
+class KillCommand : public BuiltInCommand {
+    JobsList* p_jobList;
+public:
+    KillCommand(const char* cmd_line, JobsList* jobs);
+    virtual ~KillCommand() {}
+    void execute() override;
+};
 
 class SmallShell {
 private:

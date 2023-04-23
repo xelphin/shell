@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 #include <sched.h>
 #include <ctime>
+#include <fcntl.h>
 
 #define COMMAND_ARGS_MAX_LENGTH (200)
 #define COMMAND_MAX_ARGS (20)
@@ -68,6 +69,8 @@ public:
     PipeCommand(const char* cmd_line);
     virtual ~PipeCommand() {}
     void execute() override;
+    void executeBasic();
+    void executeErr();
 };
 
 class RedirectionCommand : public Command {
@@ -214,7 +217,6 @@ private:
     std::string lastWorkingDirectory;
     pid_t fg_pid = getpid();
     std::string fg_cmd_line = "";
-    Command* cmd = nullptr;
     JobsList* jobList;
     bool killSmash = false;
 

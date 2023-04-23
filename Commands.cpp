@@ -295,6 +295,84 @@ bool _isCharArrANumber(const char* arr, int& num)
     return true;
 }
 
+bool _isComplexRedirection(const char* cmd_line)
+{
+    std::string str(cmd_line);
+    size_t index = str.find('>');
+    if (index != std::string::npos) {
+        if (index< str.length() -1) {
+            if (str[index+1] == '>') return true;
+        }
+    } else {
+        std::cout << "SHOULDN'T GET HERE!" << std::endl;
+    }
+    return false;
+}
+
+bool _cleanCharArray(char arr[])
+{
+    int firstNonSpace = -1;
+    int lastNonSpace = -1;
+    //
+    for (int i = 0; arr[i] != '\0'; i++) {
+        if (arr[i] != ' ' && firstNonSpace == -1) {
+            firstNonSpace = i;
+        }
+        if (arr[i] != ' ') {
+            lastNonSpace = i;
+        }
+    }
+    if (firstNonSpace == -1 || lastNonSpace < firstNonSpace) return false;
+    //
+    for (int i = 0; i< lastNonSpace - firstNonSpace +1; i++) {
+        arr[i] = arr[firstNonSpace + i];
+    }
+    arr[ lastNonSpace - firstNonSpace +1] = '\0';
+    return true;
+
+}
+
+bool _splitSidesIntoTwoCharArrays(char leftPart[], char rightPart[], const char* cmd_line)
+{
+    if (strlen(cmd_line) > 80 || strlen(cmd_line) < 3) {
+        return false;
+    }
+    // Find seperator index
+    std::string str(cmd_line);
+    if (str[0] == '>' || str[0] == '|') return false;
+    size_t indexSep = str.find('>');
+    if (indexSep == std::string::npos) {
+        indexSep = str.find('|');
+        if (indexSep == std::string::npos) {
+            std::cout << "SHOULDN'T GET HERE!" << std::endl;
+            return false; 
+        }
+    }
+    if (indexSep > 80) {
+        std::cout << "SHOULDN'T GET HERE!" << std::endl;
+        return false;
+    }
+    // Copy left part
+    strncpy(leftPart, cmd_line, indexSep);
+    leftPart[indexSep] = '\0';
+    // Update sepIndex (if necessary)
+    indexSep++;
+    if (str[indexSep] == '>' && indexSep < strlen(cmd_line) -1 && str[indexSep] == '>') 
+        indexSep++;
+    else if (str[indexSep] == '|' && indexSep < strlen(cmd_line) -1 && str[indexSep] == '&') 
+        indexSep++;
+
+    if (indexSep == strlen(cmd_line)) return false;
+    strcpy(rightPart, &cmd_line[indexSep]);
+    std::cout << "right part original: " << rightPart << std::endl;
+    if (!_cleanCharArray(leftPart) || !_cleanCharArray(rightPart)) return false;
+    return true;
+}
+
+
+
+
+
 // -------------------------------
 // ------- COMMAND CLASSES -------
 // -------------------------------
@@ -595,6 +673,115 @@ void ExternalCommand::execute()
 // ----------------------------------
 // ------- SPECIAL COMMANDS ---------
 // -----------------------------------
+
+// PIPES
+
+PipeCommand::PipeCommand(const char* cmd_line) : Command(cmd_line) {}
+
+void PipeCommand::execute()
+{
+    // // CHECK input
+    // if (args_count_clean != 3) {
+    //     std::cerr << "smash error: pipe: invalid arguments\n";
+    //     return;
+    // }
+
+    // // PIPE
+    // if (strcmp(cmd_args_clean[1], "|") == 0) {
+    //     this->executeBasic();
+    // } else if (strcmp(cmd_args_clean[1], "|&") == 0) {
+    //     this->executeErr();
+    // } 
+}
+
+void PipeCommand::executeBasic()
+{
+    // SmallShell& smash = SmallShell::getInstance();
+    // int fd[2];
+    // pipe(fd);
+
+    // if (fork() == 0) {
+    //     // first child 
+    //     dup2(fd[1],1);
+    //     close(fd[0]);
+    //     close(fd[1]);
+    //     smash.executeCommand(cmd_args_clean[0]);
+    //     // Close child
+    //     smash.setKillSmash();
+    // }
+    // if (fork() == 0) { 
+    //     // second child 
+    //     dup2(fd[0],0);
+    //     close(fd[0]);
+    //     close(fd[1]);
+    //     smash.executeCommand(cmd_args_clean[2]);
+    //     // Close child
+    //     smash.setKillSmash();
+    // }
+    // close(fd[0]);
+    // close(fd[1]);
+}
+
+void PipeCommand::executeErr()
+{
+
+}
+
+// REDIRECTION COMMAND
+
+RedirectionCommand::RedirectionCommand(const char* cmd_line) : Command(cmd_line) {}
+
+void RedirectionCommand::execute()
+{
+    // if (args_count_clean < 3) {
+    //     std::cerr << "smash error: pipe: invalid arguments\n";
+    //     return;
+    // }
+    bool isComplex = _isComplexRedirection(cmd_line_clean);
+    char leftPart[81];
+    char rightPart[81];
+
+    if (!_splitSidesIntoTwoCharArrays(leftPart, rightPart, cmd_line_clean)) {
+        std::cerr << "smash error: redirection: invalid arguments\n";
+        return;      
+    }
+    std::cout << "left: " << leftPart << std::endl;
+    std::cout << "rightPart: " << rightPart << std::endl;
+
+
+    SmallShell& smash = SmallShell::getInstance();
+    // FORK
+    pid_t pid = fork();
+    if (pid < 0) {
+        perror("smash error: fork failed");
+    }
+    // "Parent > Child" || "Parent >> Child"
+    if (pid == 0) {
+        // CHILD 
+        close(1);
+        if (!isComplex) {
+            // "Parent > Child"
+            open(rightPart, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR); // redirects output to file
+        } 
+        else {
+            // "Parent >> Child"
+            if (access(rightPart, F_OK) == 0) {
+                // file exists
+                open(rightPart, O_WRONLY | O_APPEND, S_IRUSR | S_IWUSR);
+            } else {
+                // file doesn't exist
+                open(rightPart, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR); // redirects output to file
+            }
+        }
+        smash.executeCommand(leftPart);
+        // Close child
+        smash.setKillSmash();
+    } else {
+        // PARENT
+        wait(NULL);
+    }
+}
+
 
 // CHMOD COMMAND
 
@@ -1072,8 +1259,12 @@ Command * SmallShell::CreateCommand(const char *cmd_line) {
     std::string firstWord_clean = cmd_s.substr(0, cmd_s_clean.find_first_of(" \n")); // note: chprompt& hello, shouldn't work
 
     // CHOOSE COMMAND
-
-    if (firstWord_clean == "pwd") {
+    if (strchr(cmd_line, '>')) {
+        // Is Redirection Command
+        return new RedirectionCommand(cmd_line);
+    } else if (strchr(cmd_line, '|')) {
+        return new PipeCommand(cmd_line);
+    } else if (firstWord_clean == "pwd") {
         return new GetCurrDirCommand(cmd_line);
     }
     else if (firstWord_clean == "showpid") {
@@ -1110,6 +1301,7 @@ Command * SmallShell::CreateCommand(const char *cmd_line) {
     else if (firstWord_clean == "chmod") {
         return new ChmodCommand(cmd_line);
     }
+    
         // TODO: Continue with more commands here
 
     else {
@@ -1124,13 +1316,13 @@ Command * SmallShell::CreateCommand(const char *cmd_line) {
 // -------------------------------
 
 void SmallShell::executeCommand(const char *cmd_line) {
-    this->cmd = CreateCommand(cmd_line);
-    if (this->cmd!=nullptr) {
+    Command* cmd = CreateCommand(cmd_line);
+    if (cmd!=nullptr) {
         try {
-            this->cmd->execute();
+            cmd->execute();
             delete cmd;
         } catch (const InvalidCommand & e) {
-            if (this->cmd!=nullptr) delete cmd;
+            delete cmd;
             throw InvalidCommand();
         } 
     }

@@ -560,6 +560,49 @@ void ExternalCommand::execute()
 }
 
 // ----------------------------------
+// ------- SPECIAL COMMANDS ---------
+// -----------------------------------
+
+GetFileTypeCommand::GetFileTypeCommand(const char* cmd_line) : BuiltInCommand(cmd_line) {}
+
+void GetFileTypeCommand::execute()
+{
+    if (args_count_clean != 2) {
+        std::cerr << "smash error: gettype: invalid arguments\n"; // TODO: They spelled arguments without a "g", asked in Piazza
+        // don't want to fail tests because of spelling
+        return;
+    }
+    struct stat info;
+    if (stat(cmd_args_clean[1], &info) == -1) {
+        perror("smash error: stat failed");
+        return;
+    }
+    std::string type;
+    if (S_ISREG(info.st_mode)) {
+        type = "regular file";
+    } else if (S_ISDIR(info.st_mode)) {
+        type = "directory";
+    } else if (S_ISLNK(info.st_mode)) {
+        type = "symbolic link";
+    } else if (S_ISBLK(info.st_mode)) {
+        type = "block device";
+    } else if (S_ISCHR(info.st_mode)) {
+        type = "character device";
+    } else if (S_ISFIFO(info.st_mode)) {
+        type = "FIFO";
+    } else if (S_ISSOCK(info.st_mode)) {
+        type = "socket";
+    } else {
+        std::cerr << "smash error: gettype: invalid arguments\n";
+        return;
+    }
+    long long typeSize = (long long) info.st_size;
+    std::cout << cmd_args_clean[1] <<"’s type is \""<< type <<"\" and takes up "<< std::to_string(typeSize) <<" bytes\n";
+
+}
+
+
+// ----------------------------------
 // ------- BUILT IN COMMANDS -------
 // -----------------------------------
 
@@ -959,6 +1002,9 @@ Command * SmallShell::CreateCommand(const char *cmd_line) {
     }
     else if (firstWord_clean == "kill") {
         return new KillCommand(cmd_line, this->jobList);
+    }
+    else if (firstWord_clean == "getfiletype") {
+        return new GetFileTypeCommand(cmd_line);
     }
         // TODO: Continue with more commands here
 

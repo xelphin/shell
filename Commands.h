@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sched.h>
 #include <ctime>
 
 #define COMMAND_ARGS_MAX_LENGTH (200)
@@ -191,9 +192,9 @@ public:
 };
 
 class SetcoreCommand : public BuiltInCommand {
-    // TODO: Add your data members
+    JobsList* p_jobList;
 public:
-    SetcoreCommand(const char* cmd_line);
+    SetcoreCommand(const char* cmd_line, JobsList* jobs);
     virtual ~SetcoreCommand() {}
     void execute() override;
 };

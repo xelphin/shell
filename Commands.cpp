@@ -392,7 +392,9 @@ void JobsList::killAllZombies()
             // Free its PID
             // std::cout << "killing zombie: " << it->m_cmd_line << std::endl;
             int status;
-            if (waitpid(pid, &status, WUNTRACED) == -1) perror("smash error: waitpid failed");
+            if (waitpid(pid, &status, WUNTRACED) == -1) {
+                // perror("smash error: waitpid failed");
+            }
             it = jobs_vector.erase(it);
         }
         else {

@@ -295,6 +295,19 @@ bool _isCharArrANumber(const char* arr, int& num)
     return true;
 }
 
+bool _isComplexRedirection(const char* cmd_line)
+{
+    std::string str(cmd_line);
+    size_t index = str.find('>');
+    if (index != std::string::npos) {
+        if (index< str.length() -1) {
+            if (str[index+1] == '>') return true;
+        }
+    } else {
+        std::cout << "SHOULDN'T GET HERE!" << std::endl;
+    }
+    return false;
+}
 // -------------------------------
 // ------- COMMAND CLASSES -------
 // -------------------------------
@@ -595,6 +608,51 @@ void ExternalCommand::execute()
 // ----------------------------------
 // ------- SPECIAL COMMANDS ---------
 // -----------------------------------
+
+// REDIRECTION COMMAND
+
+RedirectionCommand::RedirectionCommand(const char* cmd_line) : Command(cmd_line) {}
+
+void RedirectionCommand::execute()
+{
+    if (args_count_clean != 3) {
+        std::cerr << "smash error: pipe: invalid arguments\n";
+        return;
+    }
+    if (strcmp(cmd_args_clean[1], ">") != 0 && strcmp(cmd_args_clean[1], ">>") != 0) return;
+    SmallShell& smash = SmallShell::getInstance();
+    // FORK
+    pid_t pid = fork();
+    if (pid < 0) {
+        perror("smash error: fork failed");
+    }
+    // "Parent > Child" || "Parent >> Child"
+    if (pid == 0) {
+        // CHILD 
+        close(1);
+        if (strcmp(cmd_args_clean[1], ">") == 0) {
+            // "Parent > Child"
+            open(cmd_args_clean[2], O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR); // redirects output to file
+        } 
+        else {
+            // "Parent >> Child"
+            if (access(cmd_args_clean[2], F_OK) == 0) {
+                // file exists
+                open(cmd_args_clean[2], O_WRONLY | O_APPEND, S_IRUSR | S_IWUSR);
+            } else {
+                // file doesn't exist
+                open(cmd_args_clean[2], O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR); // redirects output to file
+            }
+        }
+        smash.executeCommand(cmd_args_clean[0]);
+        // Close child
+        smash.setKillSmash();
+    } else {
+        // PARENT
+        wait(NULL);
+    }
+}
+
 
 // CHMOD COMMAND
 
@@ -1072,8 +1130,10 @@ Command * SmallShell::CreateCommand(const char *cmd_line) {
     std::string firstWord_clean = cmd_s.substr(0, cmd_s_clean.find_first_of(" \n")); // note: chprompt& hello, shouldn't work
 
     // CHOOSE COMMAND
-
-    if (firstWord_clean == "pwd") {
+    if (strchr(cmd_line, '>')) {
+        // Is Redirection Command
+        return new RedirectionCommand(cmd_line);
+    } else if (firstWord_clean == "pwd") {
         return new GetCurrDirCommand(cmd_line);
     }
     else if (firstWord_clean == "showpid") {
@@ -1110,6 +1170,7 @@ Command * SmallShell::CreateCommand(const char *cmd_line) {
     else if (firstWord_clean == "chmod") {
         return new ChmodCommand(cmd_line);
     }
+    
         // TODO: Continue with more commands here
 
     else {
@@ -1124,13 +1185,13 @@ Command * SmallShell::CreateCommand(const char *cmd_line) {
 // -------------------------------
 
 void SmallShell::executeCommand(const char *cmd_line) {
-    this->cmd = CreateCommand(cmd_line);
-    if (this->cmd!=nullptr) {
+    Command* cmd = CreateCommand(cmd_line);
+    if (cmd!=nullptr) {
         try {
-            this->cmd->execute();
+            cmd->execute();
             delete cmd;
         } catch (const InvalidCommand & e) {
-            if (this->cmd!=nullptr) delete cmd;
+            delete cmd;
             throw InvalidCommand();
         } 
     }

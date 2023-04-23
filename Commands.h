@@ -6,6 +6,8 @@
 #include <string>
 #include <exception>
 #include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <ctime>
 
 #define COMMAND_ARGS_MAX_LENGTH (200)

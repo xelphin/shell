@@ -596,6 +596,29 @@ void ExternalCommand::execute()
 // ------- SPECIAL COMMANDS ---------
 // -----------------------------------
 
+// CHMOD COMMAND
+
+ChmodCommand::ChmodCommand(const char* cmd_line) : BuiltInCommand(cmd_line) {}
+
+void ChmodCommand::execute()
+{
+    // CHECK valid inputs
+    if (args_count_clean != 3) {
+        std::cerr << "smash error: setcore: invalid arguments\n";
+        return;
+    }
+    int new_mod;
+    if (!_isCharArrANumber(cmd_args_clean[1], new_mod)) {
+        std::cerr << "smash error: gettype: invalid arguments\n";
+        return; 
+    }
+    // CHMOD
+    int res = chmod(cmd_args_clean[2], new_mod);
+    if (res == -1) {
+        perror("smash error: chmod failed");
+    } 
+}
+
 // SET_CORE COMMAND
 
 SetcoreCommand::SetcoreCommand(const char* cmd_line, JobsList* jobs) : BuiltInCommand(cmd_line), p_jobList(jobs) {}
@@ -1083,6 +1106,9 @@ Command * SmallShell::CreateCommand(const char *cmd_line) {
     }
     else if (firstWord_clean == "setcore") {
         return new SetcoreCommand(cmd_line, this->jobList);
+    }
+    else if (firstWord_clean == "chmod") {
+        return new ChmodCommand(cmd_line);
     }
         // TODO: Continue with more commands here
 

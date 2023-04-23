@@ -264,6 +264,36 @@ bool _isValidKillSyntax(char* cmd_args_array[],  int args_count, int& signal, in
     return true;
 }
 
+bool _isCharArrAPosNumber(const char* arr, int& num)
+{
+    int count = 0;
+    for(; arr[count] != '\0'; count++) {
+        char chr = arr[count];
+        if(!isdigit(chr)) return false;
+    }
+    if (arr[0] == '\0') return false;
+    num = stoi(arr);
+    return true;
+}
+
+bool _isCharArrANumber(const char* arr, int& num)
+{
+    if (arr[0] == '\0') return false;
+    bool isNegResolved = true;
+    for (int i = 0; arr[i] != '\0'; i++) {
+        if (i == 0 && arr[i] == '-') {
+            isNegResolved = false;
+            continue;
+        }
+        if (!std::isdigit(arr[i])) {
+            return false;
+        }
+        isNegResolved = true;
+    }
+    if (!isNegResolved) return false;
+    num = stoi(arr);
+    return true;
+}
 
 // -------------------------------
 // ------- COMMAND CLASSES -------
@@ -347,7 +377,7 @@ void JobsList::killAllZombies()
         int res = waitpid(pid, &status, WNOHANG);
         if (res == -1) {
             // Error occurred
-            perror("smash error: waitpid failed");
+            // perror("smash error: waitpid failed");
             it++;
         }
         else if (res == 0) {
@@ -362,7 +392,9 @@ void JobsList::killAllZombies()
             // Free its PID
             // std::cout << "killing zombie: " << it->m_cmd_line << std::endl;
             int status;
-            if (waitpid(pid, &status, WUNTRACED) == -1) perror("smash error: waitpid failed");
+            if (waitpid(pid, &status, WUNTRACED) == -1) {
+                // perror("smash error: waitpid failed");
+            }
             it = jobs_vector.erase(it);
         }
         else {
@@ -483,6 +515,7 @@ void JobsList::setJobPidStopState(pid_t pid, int signal)
         }
     }
 }
+
 // --------------------------------
 // ------- EXTERNAL COMMAND -------
 // --------------------------------
@@ -495,8 +528,8 @@ void ExternalCommand::execute()
 {
     int stat;
     // TODO: The following is a basic implementation for commands like "date", "ls", "ls -a" that run in foreground, do the rest
-    if (this->args_count < 1) {
-        // std::cout << " Too few words\n"; // TODO: Erase, figure out what should actually be printed (although should never get here)
+    if (this->args_count_clean < 1) {
+        // std::cout << " Too few words\n"; // TODO: Erase, figure out what should actually be printed
         return;
     }
 
@@ -530,7 +563,7 @@ void ExternalCommand::execute()
         // BACKGROUND
         if (this->isBackground) {
             // Notice: If invalid background command, then instantly waitpid() finishes and removes it TODO
-            smash.addJob(pid, cmd_line, false); 
+            smash.addJob(pid, cmd_line, false);
         } 
 
         // FOREGROUND
@@ -562,6 +595,48 @@ void ExternalCommand::execute()
 // ----------------------------------
 // ------- SPECIAL COMMANDS ---------
 // -----------------------------------
+
+// SET_CORE COMMAND
+
+SetcoreCommand::SetcoreCommand(const char* cmd_line, JobsList* jobs) : BuiltInCommand(cmd_line), p_jobList(jobs) {}
+
+void SetcoreCommand::execute()
+{
+    // TODO: Check this function, sysconf() forwards because this material is new to me
+    // CHECK valid inputs
+    if (args_count_clean != 3) {
+        std::cerr << "smash error: setcore: invalid arguments\n";
+        return;
+    }
+    int coreNum, job_id;
+    if (!_isCharArrAPosNumber(cmd_args_clean[2], coreNum) || !_isCharArrANumber(cmd_args_clean[1], job_id)) {
+        std::cerr << "smash error: setcore: invalid arguments\n";
+        return; 
+    }
+    pid_t job_pid;
+    std::string job_cmd;
+    if (!(p_jobList->jobExists(job_id, job_cmd, job_pid, false, false))) {
+        std::cerr << "smash error: setcore: job-id "<< std::to_string(job_id) <<" does not exist\n";
+        return;
+    }
+    //CHECK valid core
+    int num_cores = sysconf(_SC_NPROCESSORS_ONLN);
+    if (coreNum < 0 || coreNum >= num_cores) {
+        std::cerr << "smash error: setcore: invalid core number" << std::endl;
+        return;
+    }
+    // CHANGE CORE
+    cpu_set_t mask;
+    CPU_ZERO(&mask);
+    CPU_SET(coreNum, &mask);
+    int ret = sched_setaffinity(job_pid, sizeof(mask), &mask);
+    if (ret == -1) {
+        perror("smash error: sched_setaffinity failed");
+        return;
+    }
+}
+
+// GET_FILE_TYPE COMMAND
 
 GetFileTypeCommand::GetFileTypeCommand(const char* cmd_line) : BuiltInCommand(cmd_line) {}
 
@@ -1005,6 +1080,9 @@ Command * SmallShell::CreateCommand(const char *cmd_line) {
     }
     else if (firstWord_clean == "getfiletype") {
         return new GetFileTypeCommand(cmd_line);
+    }
+    else if (firstWord_clean == "setcore") {
+        return new SetcoreCommand(cmd_line, this->jobList);
     }
         // TODO: Continue with more commands here
 

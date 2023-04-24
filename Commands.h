@@ -69,8 +69,6 @@ public:
     PipeCommand(const char* cmd_line);
     virtual ~PipeCommand() {}
     void execute() override;
-    void executeBasic();
-    void executeErr();
 };
 
 class RedirectionCommand : public Command {

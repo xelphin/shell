@@ -309,6 +309,20 @@ bool _isComplexRedirection(const char* cmd_line)
     return false;
 }
 
+bool _isErrPipe(const char* cmd_line)
+{
+    std::string str(cmd_line);
+    size_t index = str.find('|');
+    if (index != std::string::npos) {
+        if (index< str.length() -1) {
+            if (str[index+1] == '&') return true;
+        }
+    } else {
+        std::cout << "SHOULDN'T GET HERE!" << std::endl;
+    }
+    return false;
+}
+
 bool _cleanCharArray(char arr[])
 {
     int firstNonSpace = -1;
@@ -357,14 +371,13 @@ bool _splitSidesIntoTwoCharArrays(char leftPart[], char rightPart[], const char*
     leftPart[indexSep] = '\0';
     // Update sepIndex (if necessary)
     indexSep++;
-    if (str[indexSep] == '>' && indexSep < strlen(cmd_line) -1 && str[indexSep] == '>') 
+    if (  indexSep < strlen(cmd_line) -1  && str[indexSep] == '>') 
         indexSep++;
-    else if (str[indexSep] == '|' && indexSep < strlen(cmd_line) -1 && str[indexSep] == '&') 
+    else if (indexSep < strlen(cmd_line) -1 && str[indexSep] == '&') 
         indexSep++;
 
     if (indexSep == strlen(cmd_line)) return false;
     strcpy(rightPart, &cmd_line[indexSep]);
-    std::cout << "right part original: " << rightPart << std::endl;
     if (!_cleanCharArray(leftPart) || !_cleanCharArray(rightPart)) return false;
     return true;
 }
@@ -680,51 +693,52 @@ PipeCommand::PipeCommand(const char* cmd_line) : Command(cmd_line) {}
 
 void PipeCommand::execute()
 {
-    // // CHECK input
+    // CHECK input
     // if (args_count_clean != 3) {
     //     std::cerr << "smash error: pipe: invalid arguments\n";
     //     return;
     // }
+    // OUT CHANNEL
+    int outChannel;
+    if (_isErrPipe(cmd_line_clean)) {
+        outChannel = 2;
+    } else {
+        outChannel = 1;
+    }
+    // PIPE
+    char leftPart[81];
+    char rightPart[81];
 
-    // // PIPE
-    // if (strcmp(cmd_args_clean[1], "|") == 0) {
-    //     this->executeBasic();
-    // } else if (strcmp(cmd_args_clean[1], "|&") == 0) {
-    //     this->executeErr();
-    // } 
-}
+    if (!_splitSidesIntoTwoCharArrays(leftPart, rightPart, cmd_line_clean)) {
+        std::cerr << "smash error: redirection: invalid arguments\n";
+        return;      
+    }
+    SmallShell& smash = SmallShell::getInstance();
+    int fd[2];
+    pipe(fd);
 
-void PipeCommand::executeBasic()
-{
-    // SmallShell& smash = SmallShell::getInstance();
-    // int fd[2];
-    // pipe(fd);
-
-    // if (fork() == 0) {
-    //     // first child 
-    //     dup2(fd[1],1);
-    //     close(fd[0]);
-    //     close(fd[1]);
-    //     smash.executeCommand(cmd_args_clean[0]);
-    //     // Close child
-    //     smash.setKillSmash();
-    // }
-    // if (fork() == 0) { 
-    //     // second child 
-    //     dup2(fd[0],0);
-    //     close(fd[0]);
-    //     close(fd[1]);
-    //     smash.executeCommand(cmd_args_clean[2]);
-    //     // Close child
-    //     smash.setKillSmash();
-    // }
-    // close(fd[0]);
-    // close(fd[1]);
-}
-
-void PipeCommand::executeErr()
-{
-
+    if (fork() == 0) {
+        // first child 
+        dup2(fd[1],outChannel);
+        close(fd[0]);
+        close(fd[1]);
+        smash.executeCommand(leftPart);
+        // Close child
+        smash.setKillSmash();
+        return;
+    }
+    if (fork() == 0) { 
+        // second child 
+        dup2(fd[0],0);
+        close(fd[0]);
+        close(fd[1]);
+        smash.executeCommand(rightPart);
+        // Close child
+        smash.setKillSmash();
+        return;
+    }
+    close(fd[0]);
+    close(fd[1]);
 }
 
 // REDIRECTION COMMAND
@@ -745,8 +759,8 @@ void RedirectionCommand::execute()
         std::cerr << "smash error: redirection: invalid arguments\n";
         return;      
     }
-    std::cout << "left: " << leftPart << std::endl;
-    std::cout << "rightPart: " << rightPart << std::endl;
+    // std::cout << "left: " << leftPart << std::endl;
+    // std::cout << "rightPart: " << rightPart << std::endl;
 
 
     SmallShell& smash = SmallShell::getInstance();

@@ -371,9 +371,9 @@ bool _splitSidesIntoTwoCharArrays(char leftPart[], char rightPart[], const char*
     leftPart[indexSep] = '\0';
     // Update sepIndex (if necessary)
     indexSep++;
-    if (str[indexSep] == '>' && indexSep < strlen(cmd_line) -1 && str[indexSep] == '>') 
+    if (  indexSep < strlen(cmd_line) -1  && str[indexSep] == '>') 
         indexSep++;
-    else if (str[indexSep] == '|' && indexSep < strlen(cmd_line) -1 && str[indexSep] == '&') 
+    else if (indexSep < strlen(cmd_line) -1 && str[indexSep] == '&') 
         indexSep++;
 
     if (indexSep == strlen(cmd_line)) return false;
@@ -698,16 +698,14 @@ void PipeCommand::execute()
     //     std::cerr << "smash error: pipe: invalid arguments\n";
     //     return;
     // }
-    // PIPE
-    if (!_isErrPipe(cmd_line_clean)) {
-        this->executeBasic();
+    // OUT CHANNEL
+    int outChannel;
+    if (_isErrPipe(cmd_line_clean)) {
+        outChannel = 2;
     } else {
-        this->executeErr();
-    } 
-}
-
-void PipeCommand::executeBasic()
-{
+        outChannel = 1;
+    }
+    // PIPE
     char leftPart[81];
     char rightPart[81];
 
@@ -721,7 +719,7 @@ void PipeCommand::executeBasic()
 
     if (fork() == 0) {
         // first child 
-        dup2(fd[1],1);
+        dup2(fd[1],outChannel);
         close(fd[0]);
         close(fd[1]);
         smash.executeCommand(leftPart);
@@ -743,11 +741,6 @@ void PipeCommand::executeBasic()
     close(fd[1]);
 }
 
-void PipeCommand::executeErr()
-{
-
-}
-
 // REDIRECTION COMMAND
 
 RedirectionCommand::RedirectionCommand(const char* cmd_line) : Command(cmd_line) {}
@@ -766,8 +759,8 @@ void RedirectionCommand::execute()
         std::cerr << "smash error: redirection: invalid arguments\n";
         return;      
     }
-    std::cout << "left: " << leftPart << std::endl;
-    std::cout << "rightPart: " << rightPart << std::endl;
+    // std::cout << "left: " << leftPart << std::endl;
+    // std::cout << "rightPart: " << rightPart << std::endl;
 
 
     SmallShell& smash = SmallShell::getInstance();

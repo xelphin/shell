@@ -174,13 +174,31 @@ void _updateCommandForExternal(char* cmd_args_array[])
     // Depending on Command add necessary prefix
     if (cmd_args_array[0] != NULL) {
         // Make string of updated command
-        std::string updatedCommand = "/bin/"; // TODO: have more types
+        std::string updatedCommand = "/bin/"; 
         updatedCommand.append(cmd_args_array[0]);
         // Update cmd_args_array[0] to match string
         delete[] cmd_args_array[0];
         cmd_args_array[0] = new char[updatedCommand.size() + 1];
         strcpy(cmd_args_array[0], updatedCommand.c_str());
     }
+}
+
+
+void _parseTimeoutCommand(const char* cmd_line, std::string& cmd_line_new_cmd, int& duration)
+{
+
+    // When given "timeout <duration> <command>" returns "<command>"
+
+    std::string cmd_s = _trim(string(cmd_line));
+    int first_space = cmd_s.find_first_of(" ");
+    cmd_s = _trim(cmd_s.substr(first_space, cmd_s.length() - first_space));  // second word onwards
+    first_space = cmd_s.find_first_of(" "); // end of second word
+
+    std::string second_word = cmd_s.substr(0, first_space);
+    duration = stoi(second_word);
+
+    cmd_s = _trim(cmd_s.substr(first_space));  // third word onwards
+    cmd_line_new_cmd = cmd_s;
 }
 
 void _updateCommandForExternalComplex(const char* cmd_line, char** cmd_args_external)
@@ -390,8 +408,6 @@ bool _splitSidesIntoTwoCharArrays(char leftPart[], char rightPart[], const char*
 // ------- COMMAND CLASSES -------
 // -------------------------------
 
-// TODO: Add your implementation for classes in Commands.h
-
 Command::Command(const char* cmd_line) : cmd_line(cmd_line), args_count(0) {
     this->isBackground = _isBackgroundComamnd(cmd_line);
 
@@ -428,21 +444,23 @@ Command::~Command() {
 // ------- JOB LIST --------------
 // -------------------------------
 
-JobsList::JobEntry::JobEntry(const pid_t pid, std::string cmd_line, bool isStopped ) : m_pid(pid), m_cmd_line(cmd_line), m_isStopped(isStopped)  {
+JobsList::JobEntry::JobEntry(const pid_t pid, std::string cmd_line, bool isStopped , bool isTimeout, int timeout_duration) 
+: m_pid(pid), m_cmd_line(cmd_line), m_isStopped(isStopped), m_isTimeout(isTimeout),  m_timeout_duration(timeout_duration) {
     m_init = std::time(nullptr);
 }
 
 JobsList::JobsList() : jobs_vector()
 {}
 
-void JobsList::addJob(const pid_t pid, std::string cmd_line, bool isStopped) 
+void JobsList::addJob(const pid_t pid, std::string cmd_line, bool isStopped, bool isTimeout, int duration) 
 {
-    (this->jobs_vector).push_back(JobEntry(pid, cmd_line, isStopped));
+    (this->jobs_vector).push_back(JobEntry(pid, cmd_line, isStopped, isTimeout, duration));
 }
 
 void JobsList::printJobsList()
 {
-    this->killAllZombies();
+    SmallShell& smash = SmallShell::getInstance();
+    smash.killAllZombies();
     int count = 1;
     for (std::vector<JobEntry>::iterator it = jobs_vector.begin(); it != jobs_vector.end(); ++it){
         std::cout << "[" << std::to_string(count) <<"]" << it->m_cmd_line << ":" << std::to_string(it->m_pid)<< " ";
@@ -458,9 +476,9 @@ void JobsList::printJobsList()
     }
 }
 
-void JobsList::killAllZombies()
+void SmallShell::killAllZombies()
 {
-    for (std::vector<JobEntry>::iterator it = jobs_vector.begin(); it != jobs_vector.end();) {
+    for (std::vector<JobsList::JobEntry>::iterator it = jobList->jobs_vector.begin(); it != jobList->jobs_vector.end();) {
         int status;
         pid_t pid = it->m_pid;
 
@@ -482,11 +500,17 @@ void JobsList::killAllZombies()
             // Child process has exited or was terminated by a signal
             // Free its PID
             // std::cout << "killing zombie: " << it->m_cmd_line << std::endl;
+
+            // /// // CORRECTED BUT CHECK
             int status;
             if (waitpid(pid, &status, WUNTRACED) == -1) {
                 // perror("smash error: waitpid failed");
             }
-            it = jobs_vector.erase(it);
+
+            // ERASE from timeoutList
+            timeoutList->removeJobByPID(it->m_pid);
+            // ERASE from jobList
+            it = jobList->jobs_vector.erase(it);
         }
         else {
             // unknown
@@ -498,7 +522,8 @@ void JobsList::killAllZombies()
 void JobsList::killAllJobs()
 {
     // kill all zombies before we start
-    this->killAllZombies();
+    SmallShell& smash = SmallShell::getInstance();
+    smash.killAllZombies();
 
     // PRINT JOBS
     int vectorSize = ( this->jobs_vector).size();
@@ -516,7 +541,8 @@ void JobsList::killAllJobs()
 bool JobsList::jobExists(int jobId, std::string& job_cmd, pid_t& job_pid, bool removeLast, bool isFgCommand)
 {
     int indexJobId = jobId-1;
-    this->killAllZombies();
+    SmallShell& smash = SmallShell::getInstance();
+    smash.killAllZombies();
     if (jobs_vector.empty() && removeLast) {
         if (isFgCommand) std::cerr << "smash error: fg: jobs list is empty\n";
         return false;
@@ -542,7 +568,8 @@ bool JobsList::jobExists(int jobId, std::string& job_cmd, pid_t& job_pid, bool r
 bool JobsList::stoppedJobExists(int jobId, std::string& job_cmd, pid_t& job_pid, bool removeLast)
 {
     int indexJobId = jobId-1;
-    this->killAllZombies();
+    SmallShell& smash = SmallShell::getInstance();
+    smash.killAllZombies();
     if (jobs_vector.empty() && removeLast) {
         std::cerr << "smash error: bg: there is no stopped jobs to resume\n";
         return false;
@@ -607,18 +634,50 @@ void JobsList::setJobPidStopState(pid_t pid, int signal)
     }
 }
 
+bool JobsList::isTimeout(pid_t pid) const
+{
+    for (std::vector<JobEntry>::const_iterator it = (this->jobs_vector).begin(); it != jobs_vector.end(); ++it){
+        if (it->m_pid == pid  && it->m_isTimeout) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool JobsList::killTimeoutBecauseOfAlarm()
+{
+    SmallShell& smash = SmallShell::getInstance();
+    smash.killAllZombies(); // TODO: Check this!
+    std::time_t now = std::time(nullptr);
+
+    // std::cout << "got alarm and now need to kill first job in timeout_vector to have a life > its timeout. Jobs: \n";
+    // this->printJobsList();
+
+    for (std::vector<JobEntry>::const_iterator it = (this->jobs_vector).begin(); it != jobs_vector.end(); ++it){
+        // std::cout << "checking job: " << it->m_cmd_line << " has difftime: " << std::to_string(std::difftime(now, it->m_init)) << std::endl;
+        if (std::difftime(now, it->m_init)  >= it->m_timeout_duration) {
+            // If elapsed time is larger than duration then kill the process
+            std::cout << "smash: "<< it->m_cmd_line << " timed out!\n";
+            kill(it->m_pid, SIGKILL);
+            return true;
+        }
+    }
+    return false;
+}
+
+
 // --------------------------------
 // ------- EXTERNAL COMMAND -------
 // --------------------------------
 
-ExternalCommand::ExternalCommand(const char* cmd_line) : Command(cmd_line) {
+ExternalCommand::ExternalCommand(const char* cmd_line, bool is_alarm, int timeout_duration, const char* full_timeout_str) 
+: Command(cmd_line), is_alarm(is_alarm), timeout_duration(timeout_duration),  full_timeout_str(full_timeout_str){
     _updateCommandForExternalComplex(cmd_line_clean, cmd_args_clean_external);
 }
 
 void ExternalCommand::execute()
 {
     int stat;
-    // TODO: The following is a basic implementation for commands like "date", "ls", "ls -a" that run in foreground, do the rest
     if (this->args_count_clean < 1) {
         // std::cout << " Too few words\n"; // TODO: Erase, figure out what should actually be printed
         return;
@@ -654,14 +713,25 @@ void ExternalCommand::execute()
         // BACKGROUND
         if (this->isBackground) {
             // Notice: If invalid background command, then instantly waitpid() finishes and removes it TODO
-            smash.addJob(pid, cmd_line, false);
+            if (!this->is_alarm) {
+                smash.addJob(pid, cmd_line, false, this->is_alarm, this->timeout_duration);
+            } else {
+                smash.addJob(pid, this->full_timeout_str, false, this->is_alarm, this->timeout_duration);
+                smash.addTimeoutToList(pid, this->full_timeout_str, this->timeout_duration);
+            }
         } 
 
         // FOREGROUND
         else {
             // Update Foreground PID to be that of Child
             smash.updateFgPid(pid);
-            smash.updateFgCmdLine(this->cmd_line);
+            if (!this->is_alarm) {
+                smash.updateFgCmdLine(this->cmd_line); 
+            } else {
+                smash.updateFgCmdLine(this->full_timeout_str);
+                smash.addTimeoutToList(pid, this->full_timeout_str, this->timeout_duration); // I can assume if timeout the command is real
+            }
+                      
             // Wait for child to finish/get signal
             if (waitpid(pid, &stat, WUNTRACED ) < 0) {
                 perror("smash error: wait failed");
@@ -1161,19 +1231,49 @@ void ShowPidCommand::execute()
     std::cout << text;
 }
 
+
+// TIME_OUT COMMAND
+
+TimeoutCommand::TimeoutCommand(const char* cmd_line) : BuiltInCommand(cmd_line) , m_duration(0), m_command("")
+{
+    _parseTimeoutCommand(cmd_line, m_command ,m_duration); // we can assume correct input: Piazza: @57
+}
+
+void TimeoutCommand::execute()
+{
+    // std::cout << "command: " << m_command << std::endl;
+
+    // TODO: Implement this
+    // In JobsList::killTimeoutBecauseOfAlarm, need to make killAllZombies work for it, porbably make it a smash command
+    // and not a jobsList command is best, also because you don't want the killAllZombies from timeoutCommand to ruin that for jobsList
+
+    alarm(m_duration); // will know who to kill based on who is first in the Smash::timeoutList
+    ExternalCommand* cmd = new ExternalCommand((this->m_command).c_str(), true, this->m_duration, this->cmd_line);
+    if (cmd!=nullptr) {
+        try {
+            cmd->execute();
+            delete cmd;
+        } catch (const InvalidCommand & e) {
+            delete cmd;
+            throw InvalidCommand();
+        } 
+    }
+}
+
 // --------------------------
 // ------- SMALL SHELL -------
 // --------------------------
 
 SmallShell::SmallShell() {
-// TODO: add your implementation
     this->smashPrompt = "smash> ";
     this->lastWorkingDirectory = ""; // uninitialized
     this->jobList = new JobsList();
+    this->timeoutList = new JobsList();
 }
 
 SmallShell::~SmallShell() {
     if (this->jobList!=nullptr) delete jobList;
+    if (this->timeoutList!=nullptr) delete timeoutList;
 }
 
 std::string SmallShell::getSmashPrompt() const
@@ -1191,6 +1291,7 @@ std::string SmallShell::returnFgCmdLine() const
 {
     return fg_cmd_line;
 }
+
 
 void SmallShell::updateFgPid(const pid_t newFgPid) 
 {
@@ -1232,13 +1333,31 @@ std::string SmallShell::getLastWorkingDirectory() const
     return this->lastWorkingDirectory;
 }
 
-void SmallShell::addJob(pid_t pid, const std::string cmd_line, bool isStopped)
+void SmallShell::addJob(pid_t pid, const std::string cmd_line, bool isStopped, bool isTimeout, int duration)
 {
-    if (jobList == nullptr) { // TODO: erase this, or make a throw
+    if (jobList == nullptr) { 
         // std::cout << "You accidentaly erased JobList!\n";
         return;
     }
-    jobList->addJob(pid, cmd_line, isStopped);
+    jobList->addJob(pid, cmd_line, isStopped, isTimeout, duration);
+}
+
+void SmallShell::addTimeoutToList(pid_t pid, std::string cmd_line, int duration)
+{
+    if (timeoutList == nullptr) { 
+        // std::cout << "You accidentaly erased timeoutList!\n";
+        return;
+    }
+    timeoutList->addJob(pid, cmd_line, false, true, duration);
+}
+
+bool SmallShell::giveAlarm()
+{
+    if (timeoutList == nullptr) { 
+        // std::cout << "You accidentaly erased timeoutList!\n";
+        return false;
+    }
+    return timeoutList->killTimeoutBecauseOfAlarm();
 }
 
 bool SmallShell::getKillSmash()
@@ -1250,6 +1369,13 @@ void SmallShell::setKillSmash()
 {
     this->killSmash = true;
 }
+
+bool SmallShell::pidIsTimeout(pid_t pid)
+{
+    return this->jobList->isTimeout(pid);
+}
+
+
 /**
 * Creates and returns a pointer to Command class which matches the given command line (cmd_line)
 */
@@ -1314,6 +1440,9 @@ Command * SmallShell::CreateCommand(const char *cmd_line) {
     }
     else if (firstWord_clean == "chmod") {
         return new ChmodCommand(cmd_line);
+    }
+    else if (firstWord_clean == "timeout") {
+        return new TimeoutCommand(cmd_line);
     }
     
         // TODO: Continue with more commands here

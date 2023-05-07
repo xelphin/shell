@@ -11,6 +11,9 @@
 #include <sched.h>
 #include <ctime>
 #include <fcntl.h>
+#include <fstream>
+#include <sstream>
+#include <chrono>
 
 #define COMMAND_ARGS_MAX_LENGTH (200)
 #define COMMAND_MAX_ARGS (20)
@@ -52,8 +55,11 @@ public:
 class ExternalCommand : public Command {
 private:
     char* cmd_args_clean_external[82];
+    bool is_alarm;
+    int timeout_duration = 0;
+    const char* full_timeout_str;
 public:
-    ExternalCommand(const char* cmd_line);
+    ExternalCommand(const char* cmd_line, bool is_alarm = false, int timeout_duration = 0, const char* full_timeout_str = "");
     virtual ~ExternalCommand() {
         int N = (this->args_count_clean);
         for (int i = 0; i < N + 2; ++i) {
@@ -123,16 +129,18 @@ public:
             std::string m_cmd_line;
             std::time_t m_init;
             bool m_isStopped;
-            JobEntry(const pid_t pid, std::string cmd_line, bool isStopped );
+            bool m_isTimeout;
+            int m_timeout_duration;
+            JobEntry(const pid_t pid, std::string cmd_line, bool isStopped, bool isTimeout = false, int timeout_duration = 0);
             ~JobEntry() {};
     };
     std::vector<JobEntry> jobs_vector ;
+    int amount_killed_but_had_alarm = 0;
 public:
     JobsList();
     ~JobsList() {};
-    void addJob(const pid_t pid, std::string cmd_line, bool isStopped = false);
+    void addJob(const pid_t pid, std::string cmd_line, bool isStopped = false, bool isTimeout = false, int duration = 0);
     void printJobsList();
-    void killAllZombies();
     void killAllJobs();
     JobEntry * getJobById(int jobId);
     bool jobExists(int jobId, std::string& job_cmd, pid_t& job_pid, bool removeLast, bool isFgCommand);
@@ -141,6 +149,8 @@ public:
     JobEntry * getLastJob(int* lastJobId);
     JobEntry *getLastStoppedJob(int *jobId);
     void setJobPidStopState(pid_t pid, int signal);
+    bool isTimeout(pid_t pid) const;
+    bool killTimeoutBecauseOfAlarm(); // only used by timeoutList
 };
 
 class JobsCommand : public BuiltInCommand {
@@ -168,8 +178,8 @@ public:
 };
 
 class TimeoutCommand : public BuiltInCommand {
-/* Bonus */
-// TODO: Add your data members
+    int m_duration;
+    std::string m_command;
 public:
     explicit TimeoutCommand(const char* cmd_line);
     virtual ~TimeoutCommand() {}
@@ -216,6 +226,7 @@ private:
     pid_t fg_pid = getpid();
     std::string fg_cmd_line = "";
     JobsList* jobList;
+    JobsList* timeoutList;
     bool killSmash = false;
 
     // Private functions
@@ -246,9 +257,13 @@ public:
     std::string returnFgCmdLine() const;
     void updateFgPid(const pid_t newFgPid);
     void updateFgCmdLine(const char * newFgCmdLine);
-    void addJob(pid_t pid, std::string cmd_line, bool isStopped);
+    void addJob(pid_t pid, std::string cmd_line, bool isStopped, bool isTimeout = false, int duration = 0);
+    void addTimeoutToList(pid_t pid, std::string cmd_line, int duration);
     bool getKillSmash();
     void setKillSmash();
+    bool pidIsTimeout(pid_t pid);
+    bool giveAlarm();
+    void killAllZombies();
 };
 
 #endif //SMASH_COMMAND_H_

@@ -15,7 +15,8 @@ void ctrlZHandler(int sig_num) {
 
   if (fg_pid != getpid()) {
     // JOB LIST
-    smash.addJob(fg_pid, fg_cmd_line, true);
+    smash.addJob(fg_pid, fg_cmd_line, true, false, 0); // TODO: don't do false if is timeout! check cmd_line for whether or not is timeout
+
     // IF there is a child (in foreground) then stop fg_pid (child)
     kill(fg_pid, SIGSTOP);
     std::cout << "smash: process " << std::to_string(fg_pid) <<" was stopped\n";
@@ -39,6 +40,8 @@ void ctrlCHandler(int sig_num) {
 }
 
 void alarmHandler(int sig_num) {
-  // TODO: Add your implementation
+  std::cout << "smash: got an alarm\n";
+  SmallShell& smash = SmallShell::getInstance();
+  smash.giveAlarm();
 }
 

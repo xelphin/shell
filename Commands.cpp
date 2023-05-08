@@ -444,26 +444,37 @@ Command::~Command() {
 // ------- JOB LIST --------------
 // -------------------------------
 
-JobsList::JobEntry::JobEntry(const pid_t pid, std::string cmd_line, bool isStopped , bool isTimeout, int timeout_duration) 
-: m_pid(pid), m_cmd_line(cmd_line), m_isStopped(isStopped), m_isTimeout(isTimeout),  m_timeout_duration(timeout_duration) {
+JobsList::JobEntry::JobEntry(int jobId, const pid_t pid, std::string cmd_line, bool isStopped , bool isTimeout, int timeout_duration) 
+: m_pid(pid), m_cmd_line(cmd_line), m_isStopped(isStopped), m_isTimeout(isTimeout),  m_timeout_duration(timeout_duration), m_job_id(jobId) {
     m_init = std::time(nullptr);
 }
 
-JobsList::JobsList() : jobs_vector()
+JobsList::JobsList() : jobs_vector(), job_id_count(1)
 {}
 
 void JobsList::addJob(const pid_t pid, std::string cmd_line, bool isStopped, bool isTimeout, int duration) 
 {
-    (this->jobs_vector).push_back(JobEntry(pid, cmd_line, isStopped, isTimeout, duration));
+    SmallShell& smash = SmallShell::getInstance();
+    smash.killAllZombies();
+    // Get max jobId currently in use
+    int max_jobId_currently_in_use = 0;
+    for (std::vector<JobEntry>::iterator it = jobs_vector.begin(); it != jobs_vector.end(); ++it){
+        if (it->m_job_id > max_jobId_currently_in_use) {
+            max_jobId_currently_in_use = it->m_job_id;
+        }
+    }
+    this->job_id_count = max_jobId_currently_in_use + 1;
+
+    // Add job to jobList
+    (this->jobs_vector).push_back(JobEntry(this->job_id_count, pid, cmd_line, isStopped, isTimeout, duration));
 }
 
 void JobsList::printJobsList()
 {
     SmallShell& smash = SmallShell::getInstance();
     smash.killAllZombies();
-    int count = 1;
     for (std::vector<JobEntry>::iterator it = jobs_vector.begin(); it != jobs_vector.end(); ++it){
-        std::cout << "[" << std::to_string(count) <<"]" << it->m_cmd_line << ":" << std::to_string(it->m_pid)<< " ";
+        std::cout << "[" << std::to_string(it->m_job_id) <<"] " << it->m_cmd_line << " : " << std::to_string(it->m_pid)<< " ";
         std::time_t time_now = std::time(nullptr);
         int elapsed_seconds = std::difftime(time_now, it->m_init);
         std::cout << std::to_string(elapsed_seconds) << " secs";
@@ -472,7 +483,6 @@ void JobsList::printJobsList()
         } else {
             std::cout << std::endl;
         }
-        count++;
     }
 }
 
@@ -540,41 +550,39 @@ void JobsList::killAllJobs()
 
 bool JobsList::jobExists(int jobId, std::string& job_cmd, pid_t& job_pid, bool removeLast, bool isFgCommand)
 {
-    int indexJobId = jobId-1;
     SmallShell& smash = SmallShell::getInstance();
     smash.killAllZombies();
     if (jobs_vector.empty() && removeLast) {
         if (isFgCommand) std::cerr << "smash error: fg: jobs list is empty\n";
         return false;
     }
-    int vectorSize = ( this->jobs_vector).size();
-    if (indexJobId >= 0 && indexJobId < vectorSize && !removeLast) {
-        job_cmd = jobs_vector[indexJobId].m_cmd_line;
-        job_pid = jobs_vector[indexJobId].m_pid;
-        return true;
+    if (!removeLast) {
+        for (std::vector<JobEntry>::iterator it = jobs_vector.begin(); it != jobs_vector.end(); ++it){
+            if (it->m_job_id == jobId) {
+                job_cmd = it->m_cmd_line;
+                job_pid = it->m_pid;
+                return true;
+            }
+        }
+        if (isFgCommand) std::cerr << "smash error: fg: job-id "<< std::to_string(jobId) <<" does not exist\n";
+        return false;
     }
-    else if (removeLast) {
+    if (removeLast) {
         job_cmd = jobs_vector.back().m_cmd_line;
         job_pid = jobs_vector.back().m_pid;
         return true;
-    }
-    if (indexJobId < 0 || indexJobId >= vectorSize) {
-        if (isFgCommand) std::cerr << "smash error: fg: job-id "<< std::to_string(jobId) <<" does not exist\n";
-
     }
     return false;
 }
 
 bool JobsList::stoppedJobExists(int jobId, std::string& job_cmd, pid_t& job_pid, bool removeLast)
 {
-    int indexJobId = jobId-1;
     SmallShell& smash = SmallShell::getInstance();
     smash.killAllZombies();
     if (jobs_vector.empty() && removeLast) {
         std::cerr << "smash error: bg: there is no stopped jobs to resume\n";
         return false;
     }
-    int vectorSize = ( this->jobs_vector).size();
     // REMOVE LAST
     if (removeLast) {
         for (std::vector<JobEntry>::reverse_iterator it = jobs_vector.rbegin(); it != jobs_vector.rend(); ++it){
@@ -589,21 +597,26 @@ bool JobsList::stoppedJobExists(int jobId, std::string& job_cmd, pid_t& job_pid,
         return false;
     }
     // REMOVE AT JOB_ID
-    if (indexJobId >= 0 && indexJobId < vectorSize) {
-        // Job exists
-        if (jobs_vector[indexJobId].m_isStopped != true) {
-            // Job is running
-            std::cerr << "smash error: bg: job-id "<< std::to_string(jobId) <<" is already running in the background\n";
+    if (!removeLast) {
+        for (std::vector<JobEntry>::iterator it = jobs_vector.begin(); it != jobs_vector.end(); ++it){
+            if (it->m_job_id == jobId) {
+                // Job exists
+                if (it->m_isStopped != true) {
+                    // Job is running
+                    std::cerr << "smash error: bg: job-id "<< std::to_string(jobId) <<" is already running in the background\n";
+                    return false;
+                }
+                // Job is stopped
+                it->m_isStopped = false;
+                job_cmd = it->m_cmd_line;
+                job_pid = it->m_pid;
+                return true;
+            }
+            // Job doesn't exist
+            std::cerr << "smash error: bg: job-id "<< std::to_string(jobId) <<" does not exist\n";
             return false;
         }
-        // Job is stopped
-        jobs_vector[indexJobId].m_isStopped = false;
-        job_cmd = jobs_vector[indexJobId].m_cmd_line;
-        job_pid = jobs_vector[indexJobId].m_pid;
-        return true;
     }
-    // Job doesn't exist
-    std::cerr << "smash error: bg: job-id "<< std::to_string(jobId) <<" does not exist\n";
     return false;
 }
 
@@ -1011,6 +1024,10 @@ void KillCommand::KillCommand::execute()
         // UPDATE JOB LIST (SIGSTOP/SIGCONT)
         p_jobList->setJobPidStopState(job_pid, signal);
     }
+
+    // Clean vectors
+    SmallShell& smash = SmallShell::getInstance();
+    smash.killAllZombies();
 }
 
 // QUIT COMMAND
@@ -1418,7 +1435,7 @@ Command * SmallShell::CreateCommand(const char *cmd_line) {
         return new ChangeDirCommand(cmd_s_clean.c_str(), this->getLastWorkingDirectoryPointer());
     }
     else if (firstWord_clean == "jobs") {
-        return new JobsCommand(cmd_s_clean.c_str(), this->jobList);
+        return new JobsCommand(cmd_line, this->jobList); 
     }
     else if (firstWord_clean == "fg") {
         return new ForegroundCommand(cmd_line, this->jobList);

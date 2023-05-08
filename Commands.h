@@ -131,11 +131,13 @@ public:
             bool m_isStopped;
             bool m_isTimeout;
             int m_timeout_duration;
-            JobEntry(const pid_t pid, std::string cmd_line, bool isStopped, bool isTimeout = false, int timeout_duration = 0);
+            int m_job_id;
+            JobEntry(int jobId, const pid_t pid, std::string cmd_line, bool isStopped, bool isTimeout = false, int timeout_duration = 0);
             ~JobEntry() {};
     };
     std::vector<JobEntry> jobs_vector ;
     int amount_killed_but_had_alarm = 0;
+    int job_id_count;
 public:
     JobsList();
     ~JobsList() {};
@@ -236,6 +238,8 @@ private:
         return &lastWorkingDirectory;
     }
     SmallShell();
+
+    int job_count = 1;
 
 public:
     Command *CreateCommand(const char *cmd_line);

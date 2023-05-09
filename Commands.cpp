@@ -1232,14 +1232,14 @@ void ChangeDirCommand::execute()
         }
         if (chdir((*lastPwd).c_str()) != 0) {
             // Not successful
-            std::perror("smash error: cd failed"); 
+            std::perror("smash error: chdir failed"); 
             return;
         }
     } else {
         // Normal: cd <path>
         if (chdir(secondWord.c_str()) != 0) {
             // Not successful
-            std::perror("smash error: cd failed"); 
+            std::perror("smash error: chdir failed"); 
             return;
         }
     }

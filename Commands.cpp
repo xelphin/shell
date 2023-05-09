@@ -800,6 +800,7 @@ void PipeCommand::execute()
     //     std::cerr << "smash error: pipe: invalid arguments\n";
     //     return;
     // }
+
     // OUT CHANNEL
     int outChannel;
     if (_isErrPipe(cmd_line_clean)) {
@@ -807,7 +808,8 @@ void PipeCommand::execute()
     } else {
         outChannel = 1;
     }
-    // PIPE
+
+    // INPUT
     char leftPart[81];
     char rightPart[81];
 
@@ -816,6 +818,8 @@ void PipeCommand::execute()
         return;      
     }
     SmallShell& smash = SmallShell::getInstance();
+
+    // PIPE
     int fd[2];
     pipe(fd);
 
@@ -841,6 +845,10 @@ void PipeCommand::execute()
     }
     close(fd[0]);
     close(fd[1]);
+
+    int status;
+    wait(&status);
+    wait(&status);
 }
 
 // REDIRECTION COMMAND

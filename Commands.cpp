@@ -99,6 +99,37 @@ std::string _findXthWord(std::vector<std::string>& vector, int x)
     return "";
 }
 
+bool _isCharArrAPosNumber(const char* arr, int& num)
+{
+    int count = 0;
+    for(; arr[count] != '\0'; count++) {
+        char chr = arr[count];
+        if(!isdigit(chr)) return false;
+    }
+    if (arr[0] == '\0') return false;
+    num = stoi(arr);
+    return true;
+}
+
+bool _isCharArrANumber(const char* arr, int& num)
+{
+    if (arr[0] == '\0') return false;
+    bool isNegResolved = true;
+    for (int i = 0; arr[i] != '\0'; i++) {
+        if (i == 0 && arr[i] == '-') {
+            isNegResolved = false;
+            continue;
+        }
+        if (!std::isdigit(arr[i])) {
+            return false;
+        }
+        isNegResolved = true;
+    }
+    if (!isNegResolved) return false;
+    num = stoi(arr);
+    return true;
+}
+
 void _chkStatus(int pid, int stat)
 {
     if (WIFEXITED(stat)) {
@@ -269,49 +300,16 @@ bool _isValidKillSyntax(char* cmd_args_array[],  int args_count, int& signal, in
     signal = atoi(cmd_args_array[1] + 1);
 
     // CHECK valid id syntax
-    count = 0;
-    for(; cmd_args_array[2][count] != '\0'; count++) {
-        char chr = cmd_args_array[2][count];
-        if(!isdigit(chr)) return false;
+    if (!_isCharArrANumber(cmd_args_array[2], jobId)) {
+        return false;
     }
-    if (count <1) return false;
-    jobId = atoi(cmd_args_array[2]);
 
     // okay
 
     return true;
 }
 
-bool _isCharArrAPosNumber(const char* arr, int& num)
-{
-    int count = 0;
-    for(; arr[count] != '\0'; count++) {
-        char chr = arr[count];
-        if(!isdigit(chr)) return false;
-    }
-    if (arr[0] == '\0') return false;
-    num = stoi(arr);
-    return true;
-}
 
-bool _isCharArrANumber(const char* arr, int& num)
-{
-    if (arr[0] == '\0') return false;
-    bool isNegResolved = true;
-    for (int i = 0; arr[i] != '\0'; i++) {
-        if (i == 0 && arr[i] == '-') {
-            isNegResolved = false;
-            continue;
-        }
-        if (!std::isdigit(arr[i])) {
-            return false;
-        }
-        isNegResolved = true;
-    }
-    if (!isNegResolved) return false;
-    num = stoi(arr);
-    return true;
-}
 
 bool _isComplexRedirection(const char* cmd_line)
 {
@@ -1038,16 +1036,17 @@ void KillCommand::KillCommand::execute()
         return;
     }
     // std::cout << "My arguments: signal: "<< std::to_string(signal) << " , jobId: " << std::to_string(jobId) << std::endl;
+    
     // Send signal to Job
-    std::cout << "signal number "<< std::to_string(signal) << " was sent to pid "<< std::to_string(job_pid) <<"\n";
     int result = kill(job_pid, signal);
     if(result == -1) {
-        perror("smash error: kill failed");
+        // perror("smash error: kill"); // TODO!!! - Check maybe need to print this instead
+        std::cerr << "smash error: kill: invalid arguments\n";
     } else {
         // UPDATE JOB LIST (SIGSTOP/SIGCONT)
+        std::cout << "signal number "<< std::to_string(signal) << " was sent to pid "<< std::to_string(job_pid) <<"\n";
         p_jobList->setJobPidStopState(job_pid, signal);
     }
-
     // Clean vectors
     SmallShell& smash = SmallShell::getInstance();
     smash.killAllZombies();

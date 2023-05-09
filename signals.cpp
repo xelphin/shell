@@ -12,10 +12,11 @@ void ctrlZHandler(int sig_num) {
   SmallShell& smash = SmallShell::getInstance(); // Same smash instance as in main
   pid_t fg_pid = smash.returnFgPid();
   std::string fg_cmd_line = smash.returnFgCmdLine();
+  int fg_job_id = smash.returnFgJobId();
 
   if (fg_pid != getpid()) {
     // JOB LIST
-    smash.addJob(fg_pid, fg_cmd_line, true, false, 0); // TODO: don't do false if is timeout! check cmd_line for whether or not is timeout
+    smash.addJob(fg_pid, fg_cmd_line, fg_job_id, true, false, 0); // TODO: don't do false if is timeout! check cmd_line for whether or not is timeout
 
     // IF there is a child (in foreground) then stop fg_pid (child)
     kill(fg_pid, SIGSTOP);

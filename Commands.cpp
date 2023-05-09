@@ -549,7 +549,7 @@ void JobsList::killAllJobs()
     int vectorSize = ( this->jobs_vector).size();
     std::cout << "smash: sending SIGKILL signal to "<< std::to_string(vectorSize) <<" jobs:\n";
     for (std::vector<JobEntry>::iterator it = jobs_vector.begin(); it != jobs_vector.end(); ++it){
-        std::cout <<  std::to_string(it->m_pid)<< ":" << it->m_cmd_line << std::endl;
+        std::cout <<  std::to_string(it->m_pid)<< ": " << it->m_cmd_line << std::endl;
     }
 
     // KILL ALL JOBS
@@ -626,10 +626,10 @@ bool JobsList::stoppedJobExists(int jobId, std::string& job_cmd, pid_t& job_pid,
                 found_job_id = it->m_job_id;
                 return true;
             }
-            // Job doesn't exist
-            std::cerr << "smash error: bg: job-id "<< std::to_string(jobId) <<" does not exist\n";
-            return false;
         }
+        // Job doesn't exist
+        std::cerr << "smash error: bg: job-id "<< std::to_string(jobId) <<" does not exist\n";
+        return false;
     }
     return false;
 }

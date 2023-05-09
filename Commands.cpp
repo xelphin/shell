@@ -447,15 +447,18 @@ Command::~Command() {
 JobsList::JobEntry::JobEntry(int jobId, const pid_t pid, std::string cmd_line, bool isStopped , bool isTimeout, int timeout_duration) 
 : m_pid(pid), m_cmd_line(cmd_line), m_isStopped(isStopped), m_isTimeout(isTimeout),  m_timeout_duration(timeout_duration), m_job_id(jobId) {
     m_init = std::time(nullptr);
+    // std::cout << "Added new job entry: jobId: " << (m_job_id) << ". Is stopped: " << (m_isStopped) << std::endl;
 }
 
 JobsList::JobsList() : jobs_vector(), job_id_count(1)
 {}
 
-void JobsList::addJob(const pid_t pid, std::string cmd_line, bool isStopped, bool isTimeout, int duration) 
+void JobsList::addJob(const pid_t pid, std::string cmd_line, int old_job_id, bool isStopped, bool isTimeout, int duration) 
 {
+    // Clean
     SmallShell& smash = SmallShell::getInstance();
     smash.killAllZombies();
+
     // Get max jobId currently in use
     int max_jobId_currently_in_use = 0;
     for (std::vector<JobEntry>::iterator it = jobs_vector.begin(); it != jobs_vector.end(); ++it){
@@ -466,7 +469,14 @@ void JobsList::addJob(const pid_t pid, std::string cmd_line, bool isStopped, boo
     this->job_id_count = max_jobId_currently_in_use + 1;
 
     // Add job to jobList
-    (this->jobs_vector).push_back(JobEntry(this->job_id_count, pid, cmd_line, isStopped, isTimeout, duration));
+    if (old_job_id < 1) {
+        (this->jobs_vector).push_back(JobEntry(this->job_id_count, pid, cmd_line, isStopped, isTimeout, duration));
+    } else {
+        // Job already existed (use old_job_id)
+        (this->jobs_vector).push_back(JobEntry(old_job_id, pid, cmd_line, isStopped, isTimeout, duration));
+        this->sortVectorByJobId();
+    }
+    
 }
 
 void JobsList::printJobsList()
@@ -548,7 +558,7 @@ void JobsList::killAllJobs()
     }
 }
 
-bool JobsList::jobExists(int jobId, std::string& job_cmd, pid_t& job_pid, bool removeLast, bool isFgCommand)
+bool JobsList::jobExists(int jobId, std::string& job_cmd, pid_t& job_pid, bool removeLast, bool isFgCommand, int& found_job_id)
 {
     SmallShell& smash = SmallShell::getInstance();
     smash.killAllZombies();
@@ -561,6 +571,7 @@ bool JobsList::jobExists(int jobId, std::string& job_cmd, pid_t& job_pid, bool r
             if (it->m_job_id == jobId) {
                 job_cmd = it->m_cmd_line;
                 job_pid = it->m_pid;
+                found_job_id = it->m_job_id;
                 return true;
             }
         }
@@ -570,12 +581,13 @@ bool JobsList::jobExists(int jobId, std::string& job_cmd, pid_t& job_pid, bool r
     if (removeLast) {
         job_cmd = jobs_vector.back().m_cmd_line;
         job_pid = jobs_vector.back().m_pid;
+        found_job_id = jobs_vector.back().m_job_id;
         return true;
     }
     return false;
 }
 
-bool JobsList::stoppedJobExists(int jobId, std::string& job_cmd, pid_t& job_pid, bool removeLast)
+bool JobsList::stoppedJobExists(int jobId, std::string& job_cmd, pid_t& job_pid, bool removeLast, int& found_job_id)
 {
     SmallShell& smash = SmallShell::getInstance();
     smash.killAllZombies();
@@ -590,6 +602,7 @@ bool JobsList::stoppedJobExists(int jobId, std::string& job_cmd, pid_t& job_pid,
                 it->m_isStopped = false;
                 job_cmd = it->m_cmd_line;
                 job_pid = it->m_pid;
+                found_job_id = it->m_job_id;
                 return true;
             }
         }
@@ -610,6 +623,7 @@ bool JobsList::stoppedJobExists(int jobId, std::string& job_cmd, pid_t& job_pid,
                 it->m_isStopped = false;
                 job_cmd = it->m_cmd_line;
                 job_pid = it->m_pid;
+                found_job_id = it->m_job_id;
                 return true;
             }
             // Job doesn't exist
@@ -678,7 +692,12 @@ bool JobsList::killTimeoutBecauseOfAlarm()
     return false;
 }
 
-
+void JobsList::sortVectorByJobId()
+{
+   sort(jobs_vector.begin(), jobs_vector.end(), [](const JobEntry& lhs, const JobEntry& rhs) {
+      return lhs.m_job_id < rhs.m_job_id; // COPIED FROM INTERNET, but i think it's fine just couldn't remember 'sort()'
+   });
+}
 // --------------------------------
 // ------- EXTERNAL COMMAND -------
 // --------------------------------
@@ -727,9 +746,9 @@ void ExternalCommand::execute()
         if (this->isBackground) {
             // Notice: If invalid background command, then instantly waitpid() finishes and removes it TODO
             if (!this->is_alarm) {
-                smash.addJob(pid, cmd_line, false, this->is_alarm, this->timeout_duration);
+                smash.addJob(pid, cmd_line, 0, false, this->is_alarm, this->timeout_duration);
             } else {
-                smash.addJob(pid, this->full_timeout_str, false, this->is_alarm, this->timeout_duration);
+                smash.addJob(pid, this->full_timeout_str, 0, false,  this->is_alarm, this->timeout_duration);
                 smash.addTimeoutToList(pid, this->full_timeout_str, this->timeout_duration);
             }
         } 
@@ -738,6 +757,7 @@ void ExternalCommand::execute()
         else {
             // Update Foreground PID to be that of Child
             smash.updateFgPid(pid);
+            smash.updateFgJobId(0);
             if (!this->is_alarm) {
                 smash.updateFgCmdLine(this->cmd_line); 
             } else {
@@ -762,6 +782,7 @@ void ExternalCommand::execute()
 
         // Update Foreground PID of Smash
         smash.updateFgPid(getpid()); // child is dead, so change back foreground to mean smash process again
+        smash.updateFgJobId(0);
         // If in background, then don't wait!
     }
 }
@@ -922,7 +943,8 @@ void SetcoreCommand::execute()
     }
     pid_t job_pid;
     std::string job_cmd;
-    if (!(p_jobList->jobExists(job_id, job_cmd, job_pid, false, false))) {
+    int found_job_id = 0;
+    if (!(p_jobList->jobExists(job_id, job_cmd, job_pid, false, false, found_job_id))) {
         std::cerr << "smash error: setcore: job-id "<< std::to_string(job_id) <<" does not exist\n";
         return;
     }
@@ -1008,8 +1030,9 @@ void KillCommand::KillCommand::execute()
     // Check Job ID exists
     std::string job_cmd;
     pid_t job_pid;
+    int found_job_id = 0;
     bool exists = false;
-    exists = p_jobList->jobExists(jobId, job_cmd, job_pid, false, false);
+    exists = p_jobList->jobExists(jobId, job_cmd, job_pid, false, false, found_job_id);
     if (!exists) {
         std::cerr << "smash error: kill: job-id "<< std::to_string(jobId) <<" does not exist\n";
         return;
@@ -1071,23 +1094,25 @@ void ForegroundCommand::execute()
     // Check Job ID exists
     std::string job_cmd;
     pid_t job_pid;
+    int found_job_id = 0;
     bool exists = false;
     if (args_count_clean != 1) {
         // "fg <int>"
-        exists = p_jobList->jobExists(std::stoi(cmd_args_clean[1]), job_cmd, job_pid, false, true);
+        exists = p_jobList->jobExists(std::stoi(cmd_args_clean[1]), job_cmd, job_pid, false, true, found_job_id);
     } else {
         // "fg"
-        exists = p_jobList->jobExists(-1, job_cmd, job_pid, true, true);
+        exists = p_jobList->jobExists(-1, job_cmd, job_pid, true, true, found_job_id);
     }
     if (!exists) return;
 
     // WAIT
-    std::cout << job_cmd << ":" << std::to_string(job_pid) << std::endl;
+    std::cout << job_cmd << " : " << std::to_string(job_pid) << std::endl;
     SmallShell& smash = SmallShell::getInstance();
     int stat;
     // Update Foreground PID to be that of Child
     smash.updateFgPid(job_pid);
     smash.updateFgCmdLine(job_cmd.c_str());
+    smash.updateFgJobId(found_job_id);
     // send SIGCONT
     if (kill(job_pid, SIGCONT) == -1) perror("smash error: kill failed");
     // Wait for child to finish/get signal
@@ -1105,6 +1130,7 @@ void ForegroundCommand::execute()
         
     // Update Foreground PID of Smash
     smash.updateFgPid(getpid()); // child is dead, so change back foreground to mean smash process again
+    smash.updateFgJobId(0);
     // If in background, then don't wait!
 
     // REMOVE
@@ -1127,18 +1153,19 @@ void BackgroundCommand::execute()
     // Check Job ID exists and is stopped
     std::string job_cmd;
     pid_t job_pid;
+    int found_job_id = 0;
     bool exists = false;
     if (args_count_clean != 1) {
         // "bg <int>"
-        exists = p_jobList->stoppedJobExists(std::stoi(cmd_args_clean[1]), job_cmd, job_pid, false);
+        exists = p_jobList->stoppedJobExists(std::stoi(cmd_args_clean[1]), job_cmd, job_pid, false, found_job_id);
     } else {
         // "bg"
-        exists = p_jobList->stoppedJobExists(-1, job_cmd, job_pid, true);
+        exists = p_jobList->stoppedJobExists(-1, job_cmd, job_pid, true, found_job_id);
     }
     if (!exists) return;
 
     // PRINT command
-    std::cout << job_cmd << ":" << std::to_string(job_pid) << std::endl;
+    std::cout << job_cmd << " : " << std::to_string(job_pid) << std::endl;
 
     // CONTINUE stopped process
     if (kill(job_pid, SIGCONT) == -1) perror("smash error: kill failed");
@@ -1309,6 +1336,11 @@ std::string SmallShell::returnFgCmdLine() const
     return fg_cmd_line;
 }
 
+int SmallShell::returnFgJobId() const
+{
+    return fg_job_id;
+}
+
 
 void SmallShell::updateFgPid(const pid_t newFgPid) 
 {
@@ -1318,6 +1350,11 @@ void SmallShell::updateFgPid(const pid_t newFgPid)
 void SmallShell::updateFgCmdLine(const char * newFgCmdLine)
 {
     this->fg_cmd_line = newFgCmdLine;
+}
+
+void SmallShell::updateFgJobId(const int newJobId)
+{
+    this->fg_job_id = newJobId;
 }
 
 
@@ -1350,13 +1387,13 @@ std::string SmallShell::getLastWorkingDirectory() const
     return this->lastWorkingDirectory;
 }
 
-void SmallShell::addJob(pid_t pid, const std::string cmd_line, bool isStopped, bool isTimeout, int duration)
+void SmallShell::addJob(pid_t pid, const std::string cmd_line, int fg_jobId, bool isStopped, bool isTimeout, int duration)
 {
     if (jobList == nullptr) { 
         // std::cout << "You accidentaly erased JobList!\n";
         return;
     }
-    jobList->addJob(pid, cmd_line, isStopped, isTimeout, duration);
+    jobList->addJob(pid, cmd_line, fg_jobId, isStopped,  isTimeout, duration);
 }
 
 void SmallShell::addTimeoutToList(pid_t pid, std::string cmd_line, int duration)
@@ -1365,7 +1402,7 @@ void SmallShell::addTimeoutToList(pid_t pid, std::string cmd_line, int duration)
         // std::cout << "You accidentaly erased timeoutList!\n";
         return;
     }
-    timeoutList->addJob(pid, cmd_line, false, true, duration);
+    timeoutList->addJob(pid, cmd_line, 0, false,  true, duration);
 }
 
 bool SmallShell::giveAlarm()

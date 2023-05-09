@@ -14,6 +14,7 @@
 #include <fstream>
 #include <sstream>
 #include <chrono>
+#include<algorithm>
 
 #define COMMAND_ARGS_MAX_LENGTH (200)
 #define COMMAND_MAX_ARGS (20)
@@ -141,18 +142,19 @@ public:
 public:
     JobsList();
     ~JobsList() {};
-    void addJob(const pid_t pid, std::string cmd_line, bool isStopped = false, bool isTimeout = false, int duration = 0);
+    void addJob(const pid_t pid, std::string cmd_line, int old_job_id, bool isStopped = false, bool isTimeout = false, int duration = 0);
     void printJobsList();
     void killAllJobs();
     JobEntry * getJobById(int jobId);
-    bool jobExists(int jobId, std::string& job_cmd, pid_t& job_pid, bool removeLast, bool isFgCommand);
-    bool stoppedJobExists(int jobId, std::string& job_cmd, pid_t& job_pid, bool removeLast);
+    bool jobExists(int jobId, std::string& job_cmd, pid_t& job_pid, bool removeLast, bool isFgCommand, int& found_job_id);
+    bool stoppedJobExists(int jobId, std::string& job_cmd, pid_t& job_pid, bool removeLast, int& found_job_id);
     bool removeJobByPID(pid_t job_pid);
     JobEntry * getLastJob(int* lastJobId);
     JobEntry *getLastStoppedJob(int *jobId);
     void setJobPidStopState(pid_t pid, int signal);
     bool isTimeout(pid_t pid) const;
     bool killTimeoutBecauseOfAlarm(); // only used by timeoutList
+    void sortVectorByJobId();
 };
 
 class JobsCommand : public BuiltInCommand {
@@ -227,6 +229,7 @@ private:
     std::string lastWorkingDirectory;
     pid_t fg_pid = getpid();
     std::string fg_cmd_line = "";
+    int fg_job_id = 0;
     JobsList* jobList;
     JobsList* timeoutList;
     bool killSmash = false;
@@ -257,11 +260,13 @@ public:
 
     // OUR METHODS
     std::string getSmashPrompt() const;
-    pid_t returnFgPid() const; 
+    pid_t returnFgPid() const;
+    int returnFgJobId() const;
     std::string returnFgCmdLine() const;
     void updateFgPid(const pid_t newFgPid);
     void updateFgCmdLine(const char * newFgCmdLine);
-    void addJob(pid_t pid, std::string cmd_line, bool isStopped, bool isTimeout = false, int duration = 0);
+    void updateFgJobId(const int newJobId);
+    void addJob(pid_t pid, std::string cmd_line, int fg_jobId, bool isStopped, bool isTimeout = false, int duration = 0);
     void addTimeoutToList(pid_t pid, std::string cmd_line, int duration);
     bool getKillSmash();
     void setKillSmash();

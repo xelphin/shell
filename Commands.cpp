@@ -872,12 +872,16 @@ void RedirectionCommand::execute()
         perror("smash error: fork failed");
     }
     // "Parent > Child" || "Parent >> Child"
+    int stateOpen;
     if (pid == 0) {
         // CHILD 
         close(1);
         if (!isComplex) {
             // "Parent > Child"
-            open(rightPart, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR); // redirects output to file
+            stateOpen = open(rightPart, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR); // redirects output to 
+            if (stateOpen == -1) {
+                perror("smash error: open failed");
+            }
         } 
         else {
             // "Parent >> Child"
@@ -889,7 +893,9 @@ void RedirectionCommand::execute()
                 open(rightPart, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR); // redirects output to file
             }
         }
-        smash.executeCommand(leftPart);
+        if (stateOpen != -1) {
+            smash.executeCommand(leftPart);
+        }
         // Close child
         smash.setKillSmash();
     } else {

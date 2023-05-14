@@ -215,21 +215,25 @@ void _updateCommandForExternal(char* cmd_args_array[])
 }
 
 
-void _parseTimeoutCommand(const char* cmd_line, std::string& cmd_line_new_cmd, int& duration)
+bool _parseTimeoutCommand(const char* cmd_line, std::string& cmd_line_new_cmd, int& duration)
 {
 
     // When given "timeout <duration> <command>" returns "<command>"
 
     std::string cmd_s = _trim(string(cmd_line));
     int first_space = cmd_s.find_first_of(" ");
+    if (first_space == -1) return false;
     cmd_s = _trim(cmd_s.substr(first_space, cmd_s.length() - first_space));  // second word onwards
     first_space = cmd_s.find_first_of(" "); // end of second word
+    if (first_space == -1) return false;
 
     std::string second_word = cmd_s.substr(0, first_space);
     duration = stoi(second_word);
 
     cmd_s = _trim(cmd_s.substr(first_space));  // third word onwards
+    if (cmd_s == "") return false;
     cmd_line_new_cmd = cmd_s;
+    return true;
 }
 
 void _updateCommandForExternalComplex(const char* cmd_line, char** cmd_args_external)
@@ -399,8 +403,72 @@ bool _splitSidesIntoTwoCharArrays(char leftPart[], char rightPart[], const char*
 }
 
 
+// -------------------------------
+// ------- ALARM LIST ------------
+// -------------------------------
+
+AlarmList::AlarmEntry::AlarmEntry( const int duration) : m_duration(duration) {
+    m_init = std::time(nullptr);
+}
+
+AlarmList::AlarmList() {}; 
+
+void AlarmList::addAlarm(const int duration)
+{
+    (this->alarm_vector).push_back(AlarmEntry(duration));
+}
+
+void AlarmList::sortVectorByDelta()
+{
+   sort(alarm_vector.begin(), alarm_vector.end(), [](const AlarmEntry& lhs, const AlarmEntry& rhs) {
+        std::time_t now = std::time(nullptr);
+        double diff_time_l = std::difftime(now, lhs.m_init);
+        double delta_l = lhs.m_duration - diff_time_l;
+        double diff_time_r = std::difftime(now, rhs.m_init);
+        double delta_r = rhs.m_duration - diff_time_r;
+        return delta_l > delta_r; // COPIED FROM INTERNET, but i think it's fine just couldn't remember 'sort()'
+   });
+}
+
+void AlarmList::setOffAlarm()
+{
+    std::time_t now = std::time(nullptr);
+    this->sortVectorByDelta();
+    if (alarm_vector.empty()) return;
+    double diff_time = std::difftime(now, alarm_vector.back().m_init);
+    double delta = alarm_vector.back().m_duration - diff_time;
+    double min_delta = delta;
+
+    // debugging
+    // std::cout << "Alarms: \n";
+    // for (AlarmEntry entry : alarm_vector) {
+    //     int diff_time_debug = std::difftime(now, entry.m_init);
+    //     int delta_debug = entry.m_duration - diff_time_debug;
+    //     std::cout << "alarm: " << (entry.m_duration) << ", delta: "<< (delta_debug) << std::endl;
+    // }
+    // ---
 
 
+    while (delta <= 0) {
+        alarm_vector.pop_back();
+        if (alarm_vector.empty()) return;
+        diff_time = std::difftime(now, alarm_vector.back().m_init);
+        delta = alarm_vector.back().m_duration - diff_time;
+        if (min_delta <= 0 || delta < min_delta) min_delta = delta;
+    }
+
+    // debugging
+    // std::cout << "Alarms (after): \n";
+    // for (AlarmEntry entry : alarm_vector) {
+    //     int diff_time_debug = std::difftime(now, entry.m_init);
+    //     int delta_debug = entry.m_duration - diff_time_debug;
+    //     std::cout << "alarm: " << (entry.m_duration) << ", delta: "<< (delta_debug) << std::endl;
+    // }
+    // std::cout << "min_delta: " << (min_delta) << std::endl;
+    // --- 
+    
+    alarm(min_delta);
+}
 
 // -------------------------------
 // ------- COMMAND CLASSES -------
@@ -449,7 +517,9 @@ JobsList::JobEntry::JobEntry(int jobId, const pid_t pid, std::string cmd_line, b
 }
 
 JobsList::JobsList() : jobs_vector(), job_id_count(1)
-{}
+{
+    this->alarmList = new AlarmList();
+}
 
 void JobsList::addJob(const pid_t pid, std::string cmd_line, int old_job_id, bool isStopped, bool isTimeout, int duration) 
 {
@@ -473,6 +543,11 @@ void JobsList::addJob(const pid_t pid, std::string cmd_line, int old_job_id, boo
         // Job already existed (use old_job_id)
         (this->jobs_vector).push_back(JobEntry(old_job_id, pid, cmd_line, isStopped, isTimeout, duration));
         this->sortVectorByJobId();
+    }
+
+    // Add alarm
+    if (isTimeout) {
+        this->alarmList->addAlarm(duration);
     }
     
 }
@@ -673,9 +748,18 @@ bool JobsList::killTimeoutBecauseOfAlarm()
 {
     SmallShell& smash = SmallShell::getInstance();
     smash.killAllZombies(); // TODO: Check this!
+    killAllZombies_private();
     std::time_t now = std::time(nullptr);
     bool found = false;
     pid_t killed_pid = -1;
+
+    // // debugging
+    // std::cout << "Jobs (one will be killed because of alarm): \n";
+    // for (JobEntry entry : jobs_vector) {
+    //     std::cout << "job: "<< entry.m_cmd_line  << std::endl;
+    // }
+    // std::cout << "------------- " << std::endl;
+    // // ---
 
     // std::cout << "got alarm and now need to kill first job in timeout_vector to have a life > its timeout. Jobs: \n";
     // this->printJobsList();
@@ -698,28 +782,7 @@ bool JobsList::killTimeoutBecauseOfAlarm()
 
 void JobsList::setAlarmForMinDelta(pid_t ignore_pid)
 {
-    std::time_t now = std::time(nullptr);
-    SmallShell& smash = SmallShell::getInstance();
-    smash.killAllZombies();
-    // FIND MINIMAL DELTA for next alarm
-    int min_delta = -1;
-    // Find the minimal (m_timeout_duration - (now_time - m_init))
-    // this->printJobsList();
-    for (std::vector<JobEntry>::const_iterator it = (this->jobs_vector).begin(); it != jobs_vector.end(); ++it){
-        if (ignore_pid == it->m_pid) continue;
-        int diff_time = std::difftime(now, it->m_init);
-        int delta = it->m_timeout_duration - diff_time;
-        if (min_delta == -1) min_delta = delta;
-        if (delta < min_delta) {
-            min_delta = delta;
-        }
-        //std::cout << "delta: " << (delta) << " for job: "<< (it->m_job_id) <<std::endl;
-    }
-    if (min_delta < 0) {
-        return;
-    }
-    // std::cout << "min_delta is : " << (min_delta) << std::endl;
-    alarm(min_delta); // <- this is because all prev alarms are forgotten
+    alarmList->setOffAlarm();
 }
 
 void JobsList::sortVectorByJobId()
@@ -727,6 +790,50 @@ void JobsList::sortVectorByJobId()
    sort(jobs_vector.begin(), jobs_vector.end(), [](const JobEntry& lhs, const JobEntry& rhs) {
       return lhs.m_job_id < rhs.m_job_id; // COPIED FROM INTERNET, but i think it's fine just couldn't remember 'sort()'
    });
+}
+
+void JobsList::killAllZombies_private()
+{
+    for (std::vector<JobsList::JobEntry>::iterator it = this->jobs_vector.begin(); it != this->jobs_vector.end();) {
+        int status;
+        pid_t pid = it->m_pid;
+
+        // If zombie then free
+        int res = waitpid(pid, &status, WNOHANG);
+        if (res == -1) {
+            int status;
+            if (waitpid(pid, &status, WUNTRACED) == -1) {
+                // perror("smash error: waitpid failed");
+            }
+            // ERASE from jobList
+            // std::cout << "erasing job: "<< it->m_cmd_line  << std::endl;
+            it = this->jobs_vector.erase(it);
+        }
+        else if (res == 0) {
+            // Job is not a zombie
+            it++;
+        } else if (WIFSTOPPED(status)) {
+            // Child process stopped by signal
+            // std::cout << "Child process " << res << " stopped by signal, not zombie" << std::endl;
+        }
+        else if (WIFEXITED(status) || WIFSIGNALED(status)) {
+            // Child process has exited or was terminated by a signal
+            // Free its PID
+            // std::cout << "killing zombie: " << it->m_cmd_line << std::endl;
+
+            // /// // CORRECTED BUT CHECK
+            int status;
+            if (waitpid(pid, &status, WUNTRACED) == -1) {
+                // perror("smash error: waitpid failed");
+            }
+            // ERASE from jobList
+            it = this->jobs_vector.erase(it);
+        }
+        else {
+            // unknown
+            it++;
+        }
+    }
 }
 // --------------------------------
 // ------- EXTERNAL COMMAND -------
@@ -1327,16 +1434,25 @@ void ShowPidCommand::execute()
 
 TimeoutCommand::TimeoutCommand(const char* cmd_line) : BuiltInCommand(cmd_line) , m_duration(0), m_command("")
 {
-    _parseTimeoutCommand(cmd_line, m_command ,m_duration); // we can assume correct input: Piazza: @57
+    int duration_temp;
+    if (args_count_clean < 3 || !_isCharArrAPosNumber(cmd_args_clean[1], duration_temp)) {
+        std::cerr << "smash error: timeout: invalid arguments\n";
+        m_duration = -1;
+        return;
+    }
+    bool correct_format = _parseTimeoutCommand(cmd_line, m_command ,m_duration); // we can assume correct input: Piazza: @57
+
+    if (!correct_format) {
+        m_duration = -1;
+        std::cerr << "smash error: timeout: invalid arguments\n";
+    }
 }
 
 void TimeoutCommand::execute()
 {
     // std::cout << "command: " << m_command << std::endl;
 
-    // alarm(m_duration); // will know who to kill based on who is first in the Smash::timeoutList
-
-
+    if (m_duration == -1) return;
 
     ExternalCommand* cmd = new ExternalCommand((this->m_command).c_str(), true, this->m_duration, this->cmd_line);
     if (cmd!=nullptr) {

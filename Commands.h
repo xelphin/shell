@@ -155,6 +155,7 @@ public:
     bool isTimeout(pid_t pid) const;
     bool killTimeoutBecauseOfAlarm(); // only used by timeoutList
     void sortVectorByJobId();
+    void setAlarmForMinDelta(pid_t ignore_pid = -1);
 };
 
 class JobsCommand : public BuiltInCommand {
@@ -273,6 +274,8 @@ public:
     bool pidIsTimeout(pid_t pid);
     bool giveAlarm();
     void killAllZombies();
+    void debug_printTimeout();
+    void call_setAlarmForMinDelta();
 };
 
 #endif //SMASH_COMMAND_H_

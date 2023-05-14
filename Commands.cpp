@@ -674,20 +674,52 @@ bool JobsList::killTimeoutBecauseOfAlarm()
     SmallShell& smash = SmallShell::getInstance();
     smash.killAllZombies(); // TODO: Check this!
     std::time_t now = std::time(nullptr);
+    bool found = false;
+    pid_t killed_pid = -1;
 
     // std::cout << "got alarm and now need to kill first job in timeout_vector to have a life > its timeout. Jobs: \n";
     // this->printJobsList();
 
+    // KILL TIMED OUT COMMAND
     for (std::vector<JobEntry>::const_iterator it = (this->jobs_vector).begin(); it != jobs_vector.end(); ++it){
         // std::cout << "checking job: " << it->m_cmd_line << " has difftime: " << std::to_string(std::difftime(now, it->m_init)) << std::endl;
         if (std::difftime(now, it->m_init)  >= it->m_timeout_duration) {
             // If elapsed time is larger than duration then kill the process
             std::cout << "smash: "<< it->m_cmd_line << " timed out!\n";
             kill(it->m_pid, SIGKILL);
-            return true;
+            killed_pid = it->m_pid;
+            found = true;
+            break;
         }
     }
-    return false;
+    this->setAlarmForMinDelta(killed_pid);
+    return found;
+}
+
+void JobsList::setAlarmForMinDelta(pid_t ignore_pid)
+{
+    std::time_t now = std::time(nullptr);
+    SmallShell& smash = SmallShell::getInstance();
+    smash.killAllZombies();
+    // FIND MINIMAL DELTA for next alarm
+    int min_delta = -1;
+    // Find the minimal (m_timeout_duration - (now_time - m_init))
+    // this->printJobsList();
+    for (std::vector<JobEntry>::const_iterator it = (this->jobs_vector).begin(); it != jobs_vector.end(); ++it){
+        if (ignore_pid == it->m_pid) continue;
+        int diff_time = std::difftime(now, it->m_init);
+        int delta = it->m_timeout_duration - diff_time;
+        if (min_delta == -1) min_delta = delta;
+        if (delta < min_delta) {
+            min_delta = delta;
+        }
+        //std::cout << "delta: " << (delta) << " for job: "<< (it->m_job_id) <<std::endl;
+    }
+    if (min_delta < 0) {
+        return;
+    }
+    // std::cout << "min_delta is : " << (min_delta) << std::endl;
+    alarm(min_delta); // <- this is because all prev alarms are forgotten
 }
 
 void JobsList::sortVectorByJobId()
@@ -748,6 +780,7 @@ void ExternalCommand::execute()
             } else {
                 smash.addJob(pid, this->full_timeout_str, 0, false,  this->is_alarm, this->timeout_duration);
                 smash.addTimeoutToList(pid, this->full_timeout_str, this->timeout_duration);
+                smash.call_setAlarmForMinDelta();
             }
         } 
 
@@ -761,6 +794,7 @@ void ExternalCommand::execute()
             } else {
                 smash.updateFgCmdLine(this->full_timeout_str);
                 smash.addTimeoutToList(pid, this->full_timeout_str, this->timeout_duration); // I can assume if timeout the command is real
+                smash.call_setAlarmForMinDelta();
             }
                       
             // Wait for child to finish/get signal
@@ -1300,11 +1334,10 @@ void TimeoutCommand::execute()
 {
     // std::cout << "command: " << m_command << std::endl;
 
-    // TODO: Implement this
-    // In JobsList::killTimeoutBecauseOfAlarm, need to make killAllZombies work for it, porbably make it a smash command
-    // and not a jobsList command is best, also because you don't want the killAllZombies from timeoutCommand to ruin that for jobsList
+    // alarm(m_duration); // will know who to kill based on who is first in the Smash::timeoutList
 
-    alarm(m_duration); // will know who to kill based on who is first in the Smash::timeoutList
+
+
     ExternalCommand* cmd = new ExternalCommand((this->m_command).c_str(), true, this->m_duration, this->cmd_line);
     if (cmd!=nullptr) {
         try {
@@ -1442,6 +1475,10 @@ bool SmallShell::pidIsTimeout(pid_t pid)
     return this->jobList->isTimeout(pid);
 }
 
+void SmallShell::call_setAlarmForMinDelta()
+{
+    this->timeoutList->setAlarmForMinDelta();
+}
 
 /**
 * Creates and returns a pointer to Command class which matches the given command line (cmd_line)

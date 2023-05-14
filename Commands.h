@@ -111,6 +111,23 @@ public:
     void execute() override;
 };
 
+class AlarmList {
+public:
+    class AlarmEntry {
+        public:
+            std::time_t m_init;
+            int m_duration;
+            AlarmEntry(const int duration);
+            ~AlarmEntry() {};
+    };
+    std::vector<AlarmEntry> alarm_vector ;
+    AlarmList();
+    ~AlarmList() {};
+    void addAlarm( const int duration);
+    void sortVectorByDelta();
+    void setOffAlarm();
+};
+
 class JobsList;
 class QuitCommand : public BuiltInCommand {
     JobsList* p_jobList;
@@ -139,9 +156,12 @@ public:
     std::vector<JobEntry> jobs_vector ;
     int amount_killed_but_had_alarm = 0;
     int job_id_count;
+    AlarmList* alarmList;
 public:
     JobsList();
-    ~JobsList() {};
+    ~JobsList() {
+        if (this->alarmList!=nullptr) delete alarmList;
+    };
     void addJob(const pid_t pid, std::string cmd_line, int old_job_id, bool isStopped = false, bool isTimeout = false, int duration = 0);
     void printJobsList();
     void killAllJobs();
@@ -156,6 +176,7 @@ public:
     bool killTimeoutBecauseOfAlarm(); // only used by timeoutList
     void sortVectorByJobId();
     void setAlarmForMinDelta(pid_t ignore_pid = -1);
+    void killAllZombies_private();
 };
 
 class JobsCommand : public BuiltInCommand {
